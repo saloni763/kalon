@@ -3,8 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import LineIcon from '@/components/LineIcon';
-import StarIcon from '@/components/StarIcon';
+import LineIcon from '@/components/ui/LineIcon';
+import StarIcon from '@/components/ui/StarIcon';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,7 +31,7 @@ export default function HomeScreen() {
     }
   };
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Dark Upper Section */}
       <View style={styles.darkSection}>
         <Image 

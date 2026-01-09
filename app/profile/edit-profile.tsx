@@ -49,20 +49,17 @@ export default function EditProfileScreen() {
         router.push('/profile/skills-interests' as any);
         break;
       case 'Notifications':
-        router.push('/notifications' as any);
+        router.push('/profile/notifications' as any);
         break;
       case 'Saved':
         // TODO: Navigate to Saved screen
-        router.push('/saved' as any);
+        router.push('/profile/saved' as any);
         break;
       case 'Subscription':
         router.push('/profile/subscription' as any);
         break;
-      case 'Notifications':
-        router.push('/notifications' as any);
-        break;
       case 'Privacy':
-        router.push('/privacy-settings' as any);
+        router.push('/profile/privacy-settings' as any);
         break;
       default:
         console.log('Navigate to:', option);
@@ -71,7 +68,7 @@ export default function EditProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.content} edges={['top']}>
+      <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>

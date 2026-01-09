@@ -5,8 +5,8 @@ import { useState, useRef } from 'react';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import BackArrowIcon from '@/components/BackArrowIcon';
-import GoogleIcon from '@/components/GoogleLogo';
-import EmailIcon from '@/components/EmailLogo';
+import GoogleIcon from '@/components/ui/GoogleLogo';
+import EmailIcon from '@/components/ui/EmailLogo';
 import { validateEmail, validateMobileNumber, validatePassword, validateName, cleanMobileNumber } from '@/utils/validation';
 
 const { width, height } = Dimensions.get('window');
@@ -90,7 +90,7 @@ export default function SignupScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.keyboardAvoidingView}

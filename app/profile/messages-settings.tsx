@@ -14,27 +14,27 @@ interface NotificationCategory {
 
 const categories: NotificationCategory[] = [
   {
-    id: 'eventInvites',
-    title: 'Event Invites',
-    description: 'Alex invited you to the event',
+    id: 'directMessages',
+    title: 'Direct Messages',
+    description: 'Alex sent you a new message.',
   },
   {
-    id: 'nearbyEvents',
-    title: 'Nearby Events & Meetups',
-    description: 'Alex is attending \'Creators Connect\' near you this weekend.',
+    id: 'messageRequests',
+    title: 'Message Requests',
+    description: 'Alex wants to message you.',
   },
   {
-    id: 'newChannelPosts',
-    title: 'New Channel Posts',
-    description: 'Alex posted in the \'Fitness & Mindfulness\' channel.',
+    id: 'groupChatMentions',
+    title: 'Group Chat Mentions',
+    description: 'Alex mentioned you in the group chat.',
   },
 ];
 
-export default function ChannelsEventsSettingsScreen() {
+export default function MessagesSettingsScreen() {
   const [settings, setSettings] = useState<Record<string, NotificationOption>>({
-    eventInvites: 'everyone',
-    nearbyEvents: 'everyone',
-    newChannelPosts: 'everyone',
+    directMessages: 'everyone',
+    messageRequests: 'everyone',
+    groupChatMentions: 'everyone',
   });
 
   const handleOptionChange = (categoryId: string, option: NotificationOption) => {
@@ -112,14 +112,14 @@ export default function ChannelsEventsSettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.content} edges={['top']}>
+      <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <TouchableOpacity onPress={() => router.back()}>
               <BackArrowCircleIcon width={26} height={26} color="#0D0A1B" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Channels & Events</Text>
+            <Text style={styles.headerTitle}>Messages</Text>
           </View>
         </View>
 

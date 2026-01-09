@@ -3,6 +3,11 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SearchIcon from '@/components/ui/SearchIcon';
+import HomeIcon from '@/components/ui/HomeIcon';
+import CalendarIcon from '@/components/ui/CalendarIcon';
+import MessageIcon from '@/components/ui/MessageIcon';
+import AddLeadIcon from '@/components/ui/AddLeadIcon';
 
 type TabItem = {
   name: string;
@@ -13,9 +18,9 @@ type TabItem = {
 
 const tabs: TabItem[] = [
   { name: 'home', route: '/homepage/home', icon: 'home', label: 'Home' },
-  { name: 'search', route: '/search', icon: 'search-outline', label: 'Search' },
+  { name: 'search', route: '/search', icon: 'search', label: 'Search' },
   { name: 'create', route: '/create', icon: 'add', label: '' }, // Special button, no label
-  { name: 'chats', route: '/chats', icon: 'chatbubble-outline', label: 'Chats' },
+  { name: 'chats', route: '/chats/chats', icon: 'chatbubble-outline', label: 'Chats' },
   { name: 'events', route: '/events', icon: 'calendar-outline', label: 'Events' },
 ];
 
@@ -23,28 +28,39 @@ export default function BottomTabNavigator() {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Don't show bottom tab on auth screens, onboarding, index, create page, or profile edit screens
-  const isAuthScreen = pathname?.startsWith('/auth') || 
-                       pathname?.startsWith('/onboard') || 
-                       pathname === '/' || 
-                       pathname === '/index' ||
-                       pathname === '/create' ||
-                       pathname?.startsWith('/profile/edit-profile') ||
-                       pathname?.startsWith('/profile/personal-info') ||
-                       pathname?.startsWith('/profile/social-network') ||
-                       pathname?.startsWith('/profile/education-role') ||
-                       pathname?.startsWith('/profile/skills-interests') ||
-                       pathname?.startsWith('/profile/subscription') ||
-                       pathname?.startsWith('/saved') ||
-                       pathname === '/notifications' ||
-                       pathname === '/notifications-list' ||
-                       pathname === '/social-activity' ||
-                       pathname === '/messages-settings' ||
-                       pathname === '/channels-events-settings' ||
-                       pathname === '/announcements-settings' ||
-                       pathname === '/privacy-settings' ||
-                       pathname === '/followers-following';
-  if (isAuthScreen) {
+  // Only show bottom tab on these allowed paths
+  const allowedPaths = [
+    '/homepage/home',
+    '/search',
+    '/events',
+    '/chats/chats',
+  ];
+  
+  // Profile route names that are NOT allowed (settings, edit pages, etc.)
+  const profileRouteNames = [
+    'edit-profile',
+    'personal-info',
+    'social-network',
+    'education-role',
+    'skills-interests',
+    'subscription',
+    'saved',
+    'notifications',
+    'social-activity',
+    'messages-settings',
+    'channels-events-settings',
+    'announcements-settings',
+    'privacy-settings',
+    'followers-following',
+  ];
+  
+  // Check if current path is an allowed screen
+  const isAllowedScreen = allowedPaths.includes(pathname || '') ||
+    // Allow profile/[userId] routes (any /profile/ path that's not a known route name)
+    (pathname?.startsWith('/profile/') && 
+     !profileRouteNames.some(routeName => pathname.includes(`/profile/${routeName}`)));
+  
+  if (!isAllowedScreen) {
     return null;
   }
 
@@ -77,14 +93,118 @@ export default function BottomTabNavigator() {
                 onPress={() => handleTabPress(tab.route)}
                 activeOpacity={0.8}
               >
-                <Ionicons name={tab.icon} size={32} color="#FFFFFF" />
+                <AddLeadIcon width={96} height={96} />
               </TouchableOpacity>
             );
           }
 
-          // Use filled icon for active tabs, outline for inactive
+          // Special handling for search tab - use SearchIcon
+          if (tab.name === 'search') {
+            return (
+              <TouchableOpacity
+                key={tab.name}
+                style={styles.tabItem}
+                onPress={() => handleTabPress(tab.route)}
+                activeOpacity={0.7}
+              >
+                <SearchIcon
+                  width={24}
+                  height={24}
+                  color={active ? '#7436D7' : '#4E4C57'}
+                />
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    active && styles.tabLabelActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }
+
+          // Special handling for home tab - use HomeIcon
+          if (tab.name === 'home') {
+            return (
+              <TouchableOpacity
+                key={tab.name}
+                style={styles.tabItem}
+                onPress={() => handleTabPress(tab.route)}
+                activeOpacity={0.7}
+              >
+                <HomeIcon
+                  width={24}
+                  height={24}
+                  color={active ? '#7436D7' : '#4E4C57'}
+                />
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    active && styles.tabLabelActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }
+
+          // Special handling for events tab - use CalendarIcon
+          if (tab.name === 'events') {
+            return (
+              <TouchableOpacity
+                key={tab.name}
+                style={styles.tabItem}
+                onPress={() => handleTabPress(tab.route)}
+                activeOpacity={0.7}
+              >
+                <CalendarIcon
+                  width={24}
+                  height={24}
+                  color={active ? '#7436D7' : '#4E4C57'}
+                />
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    active && styles.tabLabelActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }
+
+          // Special handling for chats tab - use MessageIcon
+          if (tab.name === 'chats') {
+            return (
+              <TouchableOpacity
+                key={tab.name}
+                style={styles.tabItem}
+                onPress={() => handleTabPress(tab.route)}
+                activeOpacity={0.7}
+              >
+                <MessageIcon
+                  width={24}
+                  height={24}
+                  color={active ? '#7436D7' : '#4E4C57'}
+                />
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    active && styles.tabLabelActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }
+
+          // Fallback for any other tabs - use Ionicons
           const iconName = active 
-            ? (tab.name === 'home' ? 'home' : tab.icon.replace('-outline', ''))
+            ? tab.icon.replace('-outline', '')
             : tab.icon;
 
           return (
@@ -129,6 +249,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: '#FFFFFF',
     height: 60,
+    paddingTop: 16,
   },
   tabItem: {
     flex: 1,
@@ -151,15 +272,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 26,
-    backgroundColor: '#7436D7',
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 8,
-    elevation: 4,
-    shadowColor: '#AF7DFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    marginBottom: 8,
   },
 });
 

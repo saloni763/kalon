@@ -99,9 +99,16 @@ export function RootStack() {
           }} 
         />
         <Stack.Screen 
-          name="chats" 
+          name="chats/chats" 
           options={{ 
             headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="chats/[chatId]" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
           }} 
         />
         <Stack.Screen 
@@ -111,14 +118,14 @@ export function RootStack() {
           }} 
         />
         <Stack.Screen 
-          name="saved" 
+          name="profile/saved" 
           options={{ 
             headerShown: false,
             animation: 'slide_from_right',
           }} 
         />
         <Stack.Screen 
-          name="notifications" 
+          name="profile/notifications" 
           options={{ 
             headerShown: false,
             animation: 'slide_from_right',
@@ -132,42 +139,42 @@ export function RootStack() {
           }} 
         />
         <Stack.Screen 
-          name="social-activity" 
+          name="profile/social-activity" 
           options={{ 
             headerShown: false,
             animation: 'slide_from_right',
           }} 
         />
         <Stack.Screen 
-          name="messages-settings" 
+          name="profile/messages-settings" 
           options={{ 
             headerShown: false,
             animation: 'slide_from_right',
           }} 
         />
         <Stack.Screen 
-          name="channels-events-settings" 
+          name="profile/channels-events-settings" 
           options={{ 
             headerShown: false,
             animation: 'slide_from_right',
           }} 
         />
         <Stack.Screen 
-          name="announcements-settings" 
+          name="profile/announcements-settings" 
           options={{ 
             headerShown: false,
             animation: 'slide_from_right',
           }} 
         />
         <Stack.Screen 
-          name="privacy-settings" 
+          name="profile/privacy-settings" 
           options={{ 
             headerShown: false,
             animation: 'slide_from_right',
           }} 
         />
         <Stack.Screen 
-          name="followers-following" 
+          name="profile/followers-following" 
           options={{ 
             headerShown: false,
             animation: 'slide_from_right',

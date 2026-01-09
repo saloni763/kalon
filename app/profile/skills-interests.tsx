@@ -167,7 +167,7 @@ export default function SkillsInterestsScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.content} edges={['top']}>
+      <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>

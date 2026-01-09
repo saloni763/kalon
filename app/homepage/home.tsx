@@ -2,7 +2,7 @@ import { StyleSheet, View, ScrollView, ActivityIndicator, RefreshControl } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import Header from '@/components/Header';
-import Post from '@/components/Post';
+import Post from '@/components/Post-card';
 import { usePosts } from '@/hooks/queries/usePosts';
 import { showToast } from '@/utils/toast';
 
