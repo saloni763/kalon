@@ -124,7 +124,7 @@ export default function SocialActivityScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.content} edges={['top']}>
+      <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>

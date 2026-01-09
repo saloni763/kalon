@@ -46,7 +46,7 @@ export default function SubscriptionScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={[styles.hero, { height: heroHeight }]}>
           <Image source={heroImage} style={styles.heroImage} resizeMode="contain" />
           <LinearGradient

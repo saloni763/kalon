@@ -14,6 +14,7 @@ import { RootStack } from './navigation/stacks';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from '@/utils/toastConfig';
 import { checkAuthStatus } from '@/utils/authCheck';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Keep the native splash screen visible while we load resources
 SplashScreen.preventAutoHideAsync();
@@ -74,6 +75,7 @@ export default function RootLayout() {
   }
 
   return (
+    <SafeAreaProvider>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <RootStack />
@@ -81,5 +83,6 @@ export default function RootLayout() {
         <Toast config={toastConfig} />
       </ThemeProvider>
     </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }

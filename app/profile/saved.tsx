@@ -3,8 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Post from '@/components/Post';
-import Event, { EventType } from '@/components/Event';
+import Post from '@/components/Post-card';
+import Event, { EventType } from '@/components/Event-card';
 import { usePosts } from '@/hooks/queries/usePosts';
 import { Post as PostType } from '@/services/postService';
 import { showToast } from '@/utils/toast';
@@ -151,7 +151,7 @@ export default function SavedScreen() {
       } else {
         newSet.add(postId);
         showToast.saved(() => {
-          router.push('/saved');
+          router.push('/profile/saved');
         });
       }
       return newSet;
@@ -208,7 +208,7 @@ export default function SavedScreen() {
       } else {
         newSet.add(eventId);
         showToast.saved(() => {
-          router.push('/saved');
+          router.push('/profile/saved');
         });
       }
       return newSet;
@@ -233,7 +233,7 @@ export default function SavedScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.content} edges={['top']}>
+      <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>

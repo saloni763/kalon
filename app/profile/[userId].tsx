@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePosts } from '@/hooks/queries/usePosts';
-import Post from '@/components/Post';
+import Post from '@/components/Post-card';
 import { showToast } from '@/utils/toast';
 import { Post as PostType } from '@/services/postService';
 import * as Clipboard from 'expo-clipboard';
@@ -133,7 +133,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.content} edges={['top']}>
+      <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
         {/* Top Navigation Bar */}
         <View style={styles.topNav}>
             <View style={styles.topNavLeft}>
@@ -222,7 +222,7 @@ export default function ProfileScreen() {
             <View style={styles.statsContainer}>
               <TouchableOpacity
                 style={styles.statCard}
-                onPress={() => router.push(`/followers-following?type=followers` as any)}
+                onPress={() => router.push(`/profile/followers-following?type=followers` as any)}
                 activeOpacity={0.7}
               >
                 <View style={styles.statIconContainer}>
@@ -235,7 +235,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.statCard}
-                onPress={() => router.push(`/followers-following?type=following` as any)}
+                onPress={() => router.push(`/profile/followers-following?type=following` as any)}
                 activeOpacity={0.7}
               >
                 <View style={styles.statIconContainer}>

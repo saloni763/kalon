@@ -5,8 +5,8 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AppLogo from '@/components/AppLogo';
-import GoogleIcon from '@/components/GoogleLogo';
-import EmailIcon from '@/components/EmailLogo';
+import GoogleIcon from '@/components/ui/GoogleLogo';
+import EmailIcon from '@/components/ui/EmailLogo';
 import { validateEmailOrPhone, validatePassword } from '@/utils/validation';
 import { useLogin, useGoogleLogin } from '@/hooks/queries/useAuth';
 
@@ -47,7 +47,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}

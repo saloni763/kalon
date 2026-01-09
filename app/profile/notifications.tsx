@@ -12,16 +12,16 @@ export default function NotificationsScreen() {
   const handleNavigation = (screen: string) => {
     switch (screen) {
       case 'Social Activity':
-        router.push('/social-activity' as any);
+        router.push('/profile/social-activity' as any);
         break;
       case 'Messages':
-        router.push('/messages-settings' as any);
+        router.push('/profile/messages-settings' as any);
         break;
       case 'Channels & Events':
-        router.push('/channels-events-settings' as any);
+        router.push('/profile/channels-events-settings' as any);
         break;
       case 'Announcements':
-        router.push('/announcements-settings' as any);
+        router.push('/profile/announcements-settings' as any);
         break;
       default:
         console.log('Navigate to:', screen);
@@ -30,7 +30,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.content} edges={['top']}>
+      <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
