@@ -114,6 +114,11 @@ export default function HomeScreen() {
     console.log('Report post:', postId);
   };
 
+  const handleVote = (postId: string, optionIndex: number) => {
+    // TODO: Implement vote functionality - send to backend
+    console.log('Vote on post:', postId, 'option:', optionIndex);
+  };
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.content} edges={['top']}>
@@ -133,6 +138,7 @@ export default function HomeScreen() {
         ) : (
           <ScrollView
             style={styles.feed}
+            contentContainerStyle={styles.feedContent}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -157,6 +163,7 @@ export default function HomeScreen() {
                 onMute={handleMute}
                 onUnfollow={handleUnfollow}
                 onReport={handleReport}
+                onVote={handleVote}
               />
             ))}
             {data?.posts.length === 0 && (
@@ -174,13 +181,17 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F5F5F5',
   },
   content: {
     flex: 1,
   },
   feed: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  feedContent: {
+    paddingVertical: 8,
   },
   loadingContainer: {
     flex: 1,
