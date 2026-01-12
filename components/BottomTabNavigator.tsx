@@ -18,7 +18,7 @@ type TabItem = {
 
 const tabs: TabItem[] = [
   { name: 'home', route: '/homepage/home', icon: 'home', label: 'Home' },
-  { name: 'search', route: '/search', icon: 'search', label: 'Search' },
+  { name: 'search', route: '/search/search', icon: 'search', label: 'Search' },
   { name: 'create', route: '/create', icon: 'add', label: '' }, // Special button, no label
   { name: 'chats', route: '/chats/chats', icon: 'chatbubble-outline', label: 'Chats' },
   { name: 'events', route: '/events', icon: 'calendar-outline', label: 'Events' },
@@ -31,7 +31,7 @@ export default function BottomTabNavigator() {
   // Only show bottom tab on these allowed paths
   const allowedPaths = [
     '/homepage/home',
-    '/search',
+    '/search/search',
     '/events',
     '/chats/chats',
   ];

@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '@/hooks/queries/useAuth';
 import { router } from 'expo-router';
 import VerifiedBadge from './ui/VerifiedBadge';
+import NotificationsIcon from './ui/NotificationIcon';
 
 interface HeaderProps {
   profileImageUri?: string;
@@ -56,7 +57,7 @@ export default function Header({
             </View>
             <View style={styles.planRow}>
               <Text style={styles.planText}>{planName}, </Text>
-              <TouchableOpacity onPress={onUpgradePress}>
+              <TouchableOpacity onPress={onUpgradePress || (() => router.push('/profile/subscription' as any))}>
                 <Text style={styles.upgradeText}>Upgrade</Text>
               </TouchableOpacity>
             </View>
@@ -73,7 +74,7 @@ export default function Header({
             onPress={onNotificationPress || (() => router.push('/notifications-list' as any))}
           >
             <View style={styles.iconCircle}>
-              <Ionicons name="notifications-outline" size={20} color="#AF7DFF" />
+            <NotificationsIcon width={20} height={20} color="#7436D7" />
             </View>
           </TouchableOpacity>
         </View>

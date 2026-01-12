@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import ShareIcon from '@/assets/icons/Share.svg';
 
 export interface EventType {
   id: string;
@@ -70,7 +71,7 @@ export default function Event({
               onPress={handleShare}
               activeOpacity={0.7}
             >
-              <Ionicons name="share-outline" size={20} color="#FFFFFF" />
+              <ShareIcon width={20} height={20} color="#FFFFFF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.iconButton}

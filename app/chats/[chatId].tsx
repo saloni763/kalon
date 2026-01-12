@@ -108,6 +108,7 @@ export default function ChatDetailScreen() {
   // Mock data - in real app, fetch based on chatId
   const chatInfo = {
     id: chatId || '1',
+    userId: chatId || '1', // The other user's ID (the person you're chatting with)
     name: 'Michael Rodgers',
     isOnline: true,
     profileImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
@@ -162,6 +163,11 @@ export default function ChatDetailScreen() {
     }
   };
 
+  // Navigate to user profile
+  const handleProfilePress = (userId: string) => {
+    router.push(`/profile/${userId}` as any);
+  };
+
   const renderMessage = (item: ChatItem, index: number) => {
     if ((item as unknown as DateSeparator).type === 'date') {
       return (
@@ -202,10 +208,15 @@ export default function ChatDetailScreen() {
     } else {
       return (
         <View key={message.id} style={styles.messageContainerLeft}>
-          <Image
-            source={{ uri: message.senderImage || chatInfo.profileImage }}
-            style={styles.senderAvatar}
-          />
+          <TouchableOpacity
+            onPress={() => handleProfilePress(chatInfo.userId)}
+            activeOpacity={0.7}
+          >
+            <Image
+              source={{ uri: message.senderImage || chatInfo.profileImage }}
+              style={styles.senderAvatar}
+            />
+          </TouchableOpacity>
           {message.image ? (
             <View>
               <View style={styles.receivedImageContainer}>
@@ -249,7 +260,11 @@ export default function ChatDetailScreen() {
             <BackArrowIcon width={24} height={24} color="#0D0A1B" />
           </TouchableOpacity>
 
-          <View style={styles.headerProfileContainer}>
+          <TouchableOpacity
+            style={styles.headerProfileContainer}
+            onPress={() => handleProfilePress(chatInfo.userId)}
+            activeOpacity={0.7}
+          >
             <View style={styles.headerProfileImageContainer}>
               <Image
                 source={{ uri: chatInfo.profileImage }}
@@ -263,7 +278,7 @@ export default function ChatDetailScreen() {
               <Text style={styles.headerName}>{chatInfo.name}</Text>
               <Text style={styles.headerStatus}>Active now</Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.headerIcons}>
             <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.7}>

@@ -1,9 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Post as PostType } from '@/services/postService';
 import VerifiedBadge from './ui/VerifiedBadge';
+import MuteIcon from '@/assets/icons/mute.svg';
+import UnfollowIcon from '@/assets/icons/unfollow.svg';
+import ViewProfileIcon from '@/assets/icons/view-profile.svg';
+import NotificationIcon from '@/components/ui/NotificationIcon';
+import ReportIcon from '@/assets/icons/report.svg';
+import CopyLinkIcon from '@/assets/icons/copy-link.svg';
+import SaveIcon from '@/assets/icons/bookmark.svg';
+import OptionsDrawer, { OptionItem } from './OptionsDrawer';
+import ReportDrawer from './ReportDrawer';
+import LikeIcon from '@/assets/icons/heart.svg';
+import CommentIcon from '@/assets/icons/comment.svg';
+import ShareIcon from '@/assets/icons/Share.svg';
+import LikedIcon from '@/assets/icons/liked.svg';
+import CommentedIcon from '@/assets/icons/commented.svg';
+import SharedIcon from '@/assets/icons/shared.svg';
 
 interface PostProps {
   post: PostType;
@@ -17,8 +32,11 @@ interface PostProps {
   onNotify?: (postId: string, post?: PostType) => void;
   onMute?: (postId: string) => void;
   onUnfollow?: (postId: string) => void;
+  onFollow?: (postId: string) => void;
   onReport?: (postId: string) => void;
+  onVote?: (postId: string, optionIndex: number) => void;
   isLiked?: boolean;
+  isFollowingUser?: boolean;
 }
 
 // Helper function to format time
@@ -68,14 +86,24 @@ const getInitials = (name: string): string => {
     .slice(0, 2);
 };
 
-// Helper function to calculate poll percentages (mock data for now)
-const calculatePollPercentages = (pollOptions: string[]): number[] => {
-  // For now, return mock percentages
-  // In a real app, you'd get this from the backend
-  if (pollOptions.length === 3) {
-    return [6, 14, 80]; // Mock percentages matching the image
+// Helper function to calculate poll percentages
+// Returns all zeros if no votes have been cast
+const calculatePollPercentages = (pollOptions: string[], pollVotes?: number[]): number[] => {
+  // If no votes data provided, return all zeros (no votes cast yet)
+  if (!pollVotes || pollVotes.length === 0) {
+    return pollOptions.map(() => 0);
   }
-  return pollOptions.map(() => Math.floor(100 / pollOptions.length));
+  
+  // Calculate total votes
+  const totalVotes = pollVotes.reduce((sum, votes) => sum + votes, 0);
+  
+  // If no votes, return all zeros
+  if (totalVotes === 0) {
+    return pollOptions.map(() => 0);
+  }
+  
+  // Calculate percentages
+  return pollVotes.map(votes => Math.round((votes / totalVotes) * 100));
 };
 
 export default function Post({
@@ -90,16 +118,38 @@ export default function Post({
   onNotify,
   onMute,
   onUnfollow,
+  onFollow,
   onReport,
+  onVote,
   isLiked = false,
+  isFollowingUser = false,
 }: PostProps) {
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showUnfollowConfirm, setShowUnfollowConfirm] = useState(false);
   const [showMuteConfirm, setShowMuteConfirm] = useState(false);
+  const [showReportDrawer, setShowReportDrawer] = useState(false);
+  const [localIsLiked, setLocalIsLiked] = useState(isLiked);
+  const [isCommented, setIsCommented] = useState(false);
+  const [isShared, setIsShared] = useState(false);
+  const [userVote, setUserVote] = useState<number | null>((post as any).userVoteIndex ?? null);
+  const [localPollVotes, setLocalPollVotes] = useState<number[]>((post as any).pollVotes || []);
+  
+  // Local counts that update immediately for better UX
+  const [likeCount, setLikeCount] = useState(post.likes);
+  const [commentCount, setCommentCount] = useState(post.replies);
+  const [shareCount, setShareCount] = useState(post.likes); // Using likes as share count for now
+
+  // Sync like state with prop changes
+  useEffect(() => {
+    setLocalIsLiked(isLiked);
+  }, [isLiked]);
+  
   const hashtags = extractHashtags(post.content);
   const contentWithoutHashtags = post.content.replace(/#[\w]+/g, '').trim();
   const isPoll = post.pollOptions && post.pollOptions.length > 0;
-  const pollPercentages = isPoll ? calculatePollPercentages(post.pollOptions!) : [];
+  const pollPercentages = isPoll ? calculatePollPercentages(post.pollOptions!, localPollVotes) : [];
+  const hasPollVotes = pollPercentages.some(p => p > 0);
+  const hasUserVoted = userVote !== null;
 
   // Get username from email (before @) or use a default
   const username = post.userId.email
@@ -111,10 +161,6 @@ export default function Post({
     onMenuPress?.(post.id);
   };
 
-  const handleOptionPress = (action: () => void | undefined) => {
-    setShowOptionsModal(false);
-    action?.();
-  };
 
   const handleUnfollowPress = () => {
     setShowOptionsModal(false);
@@ -130,6 +176,11 @@ export default function Post({
     setShowUnfollowConfirm(false);
   };
 
+  const handleFollowPress = () => {
+    setShowOptionsModal(false);
+    onFollow?.(post.id);
+  };
+
   const handleMutePress = () => {
     setShowOptionsModal(false);
     setShowMuteConfirm(true);
@@ -143,6 +194,68 @@ export default function Post({
   const handleCancelMute = () => {
     setShowMuteConfirm(false);
   };
+
+  // Build options array for the drawer
+  const postOptions: OptionItem[] = [
+    {
+      id: 'save',
+      icon: <SaveIcon />,
+      text: 'Save',
+      onPress: () => onSave?.(post.id, post),
+    },
+    {
+      id: 'not-interested',
+      icon: <ViewProfileIcon />,
+      text: 'Not interested',
+      onPress: () => onNotInterested?.(post.id),
+    },
+    {
+      id: 'copy-link',
+      icon: <CopyLinkIcon />,
+      text: 'Copy link',
+      onPress: () => onCopyLink?.(post.id),
+    },
+    {
+      id: 'notify',
+      icon: <NotificationIcon />,
+      text: 'Notify me',
+      onPress: () => onNotify?.(post.id, post),
+    },
+    {
+      id: 'mute',
+      icon: <MuteIcon />,
+      text: 'Mute',
+      onPress: handleMutePress,
+    },
+    // Conditionally show Follow or Unfollow based on isFollowingUser
+    ...(isFollowingUser
+      ? [
+          {
+            id: 'unfollow',
+            icon: <UnfollowIcon />,
+            text: 'Unfollow',
+            onPress: handleUnfollowPress,
+          },
+        ]
+      : [
+          {
+            id: 'follow',
+            icon: <Ionicons name="person-add-outline" size={24} color="#AF7DFF" />,
+            text: 'Follow',
+            onPress: handleFollowPress,
+          },
+        ]),
+    {
+      id: 'report',
+      icon: <ReportIcon />,
+      text: 'Report',
+      onPress: () => {
+        setShowOptionsModal(false);
+        setShowReportDrawer(true);
+      },
+      isDanger: true,
+    },
+  ];
 
   return (
     <View style={styles.post}>
@@ -204,20 +317,61 @@ export default function Post({
         <View style={styles.pollContainer}>
           {post.pollOptions.map((option, index) => {
             const percentage = pollPercentages[index] || 0;
-            const isWinning = percentage === Math.max(...pollPercentages);
+            const maxPercentage = Math.max(...pollPercentages);
+            const isWinning = hasPollVotes && percentage === maxPercentage && percentage > 0;
+            const isSelected = userVote === index;
+
+            const handleVote = () => {
+              if (hasUserVoted) {
+                // User already voted, don't allow changing vote
+                return;
+              }
+              
+              // Update local state immediately for better UX
+              const newVotes = [...localPollVotes];
+              if (newVotes.length <= index) {
+                // Initialize array if needed
+                while (newVotes.length <= index) {
+                  newVotes.push(0);
+                }
+              }
+              newVotes[index] = (newVotes[index] || 0) + 1;
+              setLocalPollVotes(newVotes);
+              setUserVote(index);
+              
+              // Call the parent handler
+              onVote?.(post.id, index);
+            };
 
             return (
-              <View key={index} style={styles.pollOption}>
-                {/* Progress Bar Background */}
-                <View style={styles.pollProgressContainer}>
-                  <View
-                    style={[
-                      styles.pollProgressBar,
-                      { width: `${percentage}%` },
-                      isWinning && styles.pollProgressBarActive,
-                    ]}
-                  />
-                </View>
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.pollOption,
+                  !hasPollVotes && styles.pollOptionNoVotes,
+                  hasPollVotes && !isWinning && styles.pollOptionWithVotes,
+                  isWinning && styles.pollOptionWinning,
+                  isSelected && !hasPollVotes && styles.pollOptionSelected,
+                ]}
+                onPress={handleVote}
+                disabled={hasUserVoted}
+                activeOpacity={hasUserVoted ? 1 : 0.7}
+              >
+                {/* Progress Bar Background - Only show if votes exist */}
+                {hasPollVotes && (
+                  <View style={[
+                    styles.pollProgressContainer,
+                    isWinning && styles.pollProgressContainerWinning,
+                  ]}>
+                    <View
+                      style={[
+                        styles.pollProgressBar,
+                        { width: `${percentage}%` },
+                        isWinning ? styles.pollProgressBarWinning : styles.pollProgressBarNormal,
+                      ]}
+                    />
+                  </View>
+                )}
 
                 {/* Poll Option Content */}
                 <View style={styles.pollOptionContent}>
@@ -225,16 +379,19 @@ export default function Post({
                     <Text
                       style={[
                         styles.pollOptionText,
-                        isWinning && styles.pollOptionTextActive,
+                        !hasPollVotes && styles.pollOptionTextNoVotes,
+                        hasPollVotes && !isWinning && styles.pollOptionTextWithVotes,
+                        isWinning && styles.pollOptionTextWinning,
                       ]}
                     >
                       {option}
                     </Text>
-                    {percentage > 0 && (
+                    {hasPollVotes && (
                       <Text
                         style={[
                           styles.pollPercentage,
-                          isWinning && styles.pollPercentageActive,
+                          !isWinning && styles.pollPercentageWithVotes,
+                          isWinning && styles.pollPercentageWinning,
                         ]}
                       >
                         {percentage}%
@@ -242,7 +399,7 @@ export default function Post({
                     )}
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -263,128 +420,111 @@ export default function Post({
       <View style={styles.postActions}>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => onLike?.(post.id)}
+          onPress={() => {
+            const wasLiked = localIsLiked;
+            setLocalIsLiked(!localIsLiked);
+            if (wasLiked) {
+              setLikeCount(prev => Math.max(0, prev - 1));
+            } else {
+              setLikeCount(prev => prev + 1);
+            }
+            onLike?.(post.id);
+          }}
         >
-          <Ionicons
-            name={isLiked ? 'heart' : 'heart-outline'}
-            size={20}
-            color={isLiked ? '#AF7DFF' : '#4E4C57'}
-          />
-          <Text style={[styles.actionText, isLiked && styles.actionTextLiked]}>
-            {formatNumber(post.likes)}
+          <View style={styles.actionButtonIcon}>
+          {localIsLiked ? (
+            <LikedIcon width={18} height={18} color="#AF7DFF" />
+            ) : (
+              <LikeIcon width={18} height={18} color="#4E4C57" />
+            )}
+          </View>
+          <Text style={[styles.actionText, localIsLiked && styles.actionTextLiked]}>
+            {formatNumber(likeCount)}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => onComment?.(post.id)}
+          onPress={() => {
+            const wasCommented = isCommented;
+            setIsCommented(!isCommented);
+            if (wasCommented) {
+              setCommentCount(prev => Math.max(0, prev - 1));
+            } else {
+              setCommentCount(prev => prev + 1);
+            }
+            onComment?.(post.id);
+          }}
         >
-          <Ionicons name="chatbubble-outline" size={20} color="#AF7DFF" />
-          <Text style={[styles.actionText, styles.actionTextPurple]}>
-            {formatNumber(post.replies)}
+          <View style={styles.actionButtonIcon}>
+          {isCommented ? (
+            <CommentedIcon width={18} height={18} color="#AF7DFF" />
+          ) : (
+            <CommentIcon width={18} height={18} color="#4E4C57" />
+            )}
+          </View>
+          <Text style={[styles.actionText, isCommented && styles.actionTextPurple]}>
+            {formatNumber(commentCount)}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => onShare?.(post.id)}
+          onPress={() => {
+            const wasShared = isShared;
+            setIsShared(!isShared);
+            if (wasShared) {
+              setShareCount(prev => Math.max(0, prev - 1));
+            } else {
+              setShareCount(prev => prev + 1);
+            }
+            onShare?.(post.id);
+          }}
         >
-          <Ionicons name="share-outline" size={20} color="#AF7DFF" />
-          <Text style={[styles.actionText, styles.actionTextPurple]}>
-            {formatNumber(post.likes)} {/* Using likes as share count for now */}
+          <View style={styles.actionButtonIcon}>
+          {isShared ? (
+            <SharedIcon width={18} height={18} color="#AF7DFF" />
+          ) : (
+            <ShareIcon width={18} height={18} color="#4E4C57" />
+          )}
+          </View>
+          <Text style={[styles.actionText, isShared && styles.actionTextPurple]}>
+            {formatNumber(shareCount)}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Options Modal */}
-      <Modal
+      {/* Options Drawer */}
+      <OptionsDrawer
         visible={showOptionsModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowOptionsModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            style={styles.modalOverlayPressable}
-            onPress={() => setShowOptionsModal(false)}
-          />
-          <View style={styles.modalContent}>
-            {/* Drag Handle */}
-            <View style={styles.modalHandle} />
+        onClose={() => setShowOptionsModal(false)}
+        options={postOptions}
+        iconColor="#AF7DFF"
+        iconSize={24}
+      />
 
-            {/* Options List */}
-            <View style={styles.optionsList}>
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={() => handleOptionPress(() => onSave?.(post.id, post))}
-              >
-                <Ionicons name="bookmark-outline" size={24} color="#AF7DFF" />
-                <Text style={styles.optionText}>Save</Text>
-              </TouchableOpacity>
-
-              <View style={styles.optionDivider} />
-
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={() => handleOptionPress(() => onNotInterested?.(post.id))}
-              >
-                <Ionicons name="close-circle-outline" size={24} color="#AF7DFF" />
-                <Text style={styles.optionText}>Not interested</Text>
-              </TouchableOpacity>
-
-              <View style={styles.optionDivider} />
-
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={() => handleOptionPress(() => onCopyLink?.(post.id))}
-              >
-                <Ionicons name="link-outline" size={24} color="#AF7DFF" />
-                <Text style={styles.optionText}>Copy link</Text>
-              </TouchableOpacity>
-
-              <View style={styles.optionDivider} />
-
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={() => handleOptionPress(() => onNotify?.(post.id, post))}
-              >
-                <Ionicons name="notifications-outline" size={24} color="#AF7DFF" />
-                <Text style={styles.optionText}>Notify me</Text>
-              </TouchableOpacity>
-
-              <View style={styles.optionDivider} />
-
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={handleMutePress}
-              >
-                <Ionicons name="volume-mute-outline" size={24} color="#AF7DFF" />
-                <Text style={styles.optionText}>Mute</Text>
-              </TouchableOpacity>
-
-              <View style={styles.optionDivider} />
-
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={handleUnfollowPress}
-              >
-                <Ionicons name="person-remove-outline" size={24} color="#AF7DFF" />
-                <Text style={styles.optionText}>Unfollow</Text>
-              </TouchableOpacity>
-
-              <View style={styles.optionDivider} />
-
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={() => handleOptionPress(() => onReport?.(post.id))}
-              >
-                <Ionicons name="alert-circle-outline" size={24} color="#FF3B30" />
-                <Text style={[styles.optionText, styles.optionTextDanger]}>Report</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Report Drawer */}
+      <ReportDrawer
+        visible={showReportDrawer}
+        onClose={() => setShowReportDrawer(false)}
+        onReportReasonSelected={(reason) => {
+          console.log('Report reason selected:', reason, 'for post:', post.id);
+          onReport?.(post.id);
+          // You can pass the reason to the onReport callback if needed
+        }}
+        userName={post.userId.name}
+        onBlock={() => {
+          // TODO: Implement block functionality
+          console.log('Block user:', post.userId.name);
+        }}
+        onRestrict={() => {
+          // TODO: Implement restrict functionality
+          console.log('Restrict user:', post.userId.name);
+        }}
+        onUnfollow={() => {
+          onUnfollow?.(post.id);
+        }}
+      />
 
       {/* Unfollow Confirmation Modal */}
       <Modal
@@ -462,8 +602,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+  
+    fontFamily: 'Montserrat_600SemiBold',
   },
   postHeader: {
     flexDirection: 'row',
@@ -538,12 +681,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4E4C57',
     marginRight: 4,
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: 'Montserrat_600SemiBold',
   },
   postTime: {
     fontSize: 14,
     color: '#4E4C57',
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: 'Montserrat_600SemiBold',
   },
   menuButton: {
     padding: 4,
@@ -553,7 +696,7 @@ const styles = StyleSheet.create({
     color: '#0D0A1B',
     lineHeight: 24,
     marginBottom: 12,
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: 'Montserrat_600SemiBold',
   },
   pollContainer: {
     marginBottom: 12,
@@ -561,13 +704,27 @@ const styles = StyleSheet.create({
   },
   pollOption: {
     borderRadius: 12,
-    backgroundColor: '#F5F5F5',
     overflow: 'hidden',
     minHeight: 48,
     padding: 12,
     position: 'relative',
     borderWidth: 1,
+  },
+  pollOptionNoVotes: {
+    backgroundColor: '#FFFFFF',
     borderColor: '#E0E0E0',
+  },
+  pollOptionWithVotes: {
+    backgroundColor: '#F5F5F5',
+    borderColor: '#E0E0E0',
+  },
+  pollOptionWinning: {
+    backgroundColor: '#AF7DFF',
+    borderColor: '#AF7DFF',
+  },
+  pollOptionSelected: {
+    borderColor: '#AF7DFF',
+    borderWidth: 2,
   },
   pollProgressContainer: {
     position: 'absolute',
@@ -577,12 +734,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: '#F5F5F5',
   },
+  pollProgressContainerWinning: {
+    backgroundColor: '#AF7DFF',
+  },
   pollProgressBar: {
     height: '100%',
-    backgroundColor: '#E0E0E0',
     borderRadius: 12,
   },
-  pollProgressBarActive: {
+  pollProgressBarNormal: {
+    backgroundColor: '#E0E0E0',
+  },
+  pollProgressBarWinning: {
     backgroundColor: '#AF7DFF',
   },
   pollOptionContent: {
@@ -596,25 +758,30 @@ const styles = StyleSheet.create({
   },
   pollOptionText: {
     fontSize: 14,
-    color: '#0D0A1B',
     fontWeight: '500',
-    fontFamily: 'Montserrat_500Medium',
-  },
-  pollOptionTextActive: {
-    color: '#0D0A1B',
-    fontWeight: '600',
     fontFamily: 'Montserrat_600SemiBold',
+  },
+  pollOptionTextNoVotes: {
+    color: '#0D0A1B',
+  },
+  pollOptionTextWithVotes: {
+    color: '#0D0A1B',
+  },
+  pollOptionTextWinning: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   pollPercentage: {
     fontSize: 14,
-    color: '#4E4C57',
     fontWeight: '500',
-    fontFamily: 'Montserrat_500Medium',
-  },
-  pollPercentageActive: {
-    color: '#AF7DFF',
-    fontWeight: '600',
     fontFamily: 'Montserrat_600SemiBold',
+  },
+  pollPercentageWithVotes: {
+    color: '#0D0A1B',
+  },
+  pollPercentageWinning: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   hashtagsContainer: {
     flexDirection: 'row',
@@ -626,76 +793,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#AF7DFF',
     fontWeight: '500',
-    fontFamily: 'Montserrat_500Medium',
+    fontFamily: 'Montserrat_600SemiBold',
   },
   postActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 24,
+    gap: 30,
     paddingTop: 8,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+  },
+  actionButtonIcon: {
+    width: 38,
+    height: 38,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   actionText: {
     fontSize: 14,
     color: '#4E4C57',
     fontWeight: '500',
-    fontFamily: 'Montserrat_500Medium',
+    fontFamily: 'Montserrat_600SemiBold',
   },
   actionTextLiked: {
     color: '#AF7DFF',
   },
   actionTextPurple: {
     color: '#AF7DFF',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalOverlayPressable: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  optionsList: {
-    paddingHorizontal: 20,
-  },
-  optionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    gap: 16,
-  },
-  optionText: {
-    fontSize: 16,
-    color: '#0D0A1B',
-    fontFamily: 'Montserrat_400Regular',
-  },
-  optionTextDanger: {
-    color: '#FF3B30',
-  },
-  optionDivider: {
-    height: 1,
-    backgroundColor: '#F0F0F0',
-    marginLeft: 40,
   },
   confirmModalOverlay: {
     flex: 1,
@@ -722,7 +851,7 @@ const styles = StyleSheet.create({
     color: '#0D0A1B',
     textAlign: 'center',
     marginBottom: 24,
-    fontFamily: 'Montserrat_700Bold',
+    fontFamily: 'Montserrat_600SemiBold',
   },
   confirmButton: {
     backgroundColor: '#E74C3C',
@@ -759,7 +888,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 20,
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: 'Montserrat_600SemiBold',
   },
   muteConfirmButton: {
     backgroundColor: '#AF7DFF',
