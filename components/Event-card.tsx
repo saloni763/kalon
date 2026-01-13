@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ShareIcon from '@/assets/icons/Share.svg';
+import CalendarIcon from '@/components/ui/CalendarIcon';
 
 export interface EventType {
   id: string;
@@ -9,6 +10,7 @@ export interface EventType {
   host: string;
   date: string;
   time: string;
+  location?: string;
   imageUri?: string;
   joinedCount: number;
   isOnline: boolean;
@@ -96,7 +98,7 @@ export default function Event({
             <View style={styles.overlayBottomRight}>
               <View style={styles.onlineBadge}>
                 <Text style={styles.onlineText}>
-                  {event.isOnline ? 'Online' : 'Offline'}
+                  {event.isOnline ? 'Online' : 'Onsite'}
                 </Text>
               </View>
             </View>
@@ -107,30 +109,43 @@ export default function Event({
       {/* Event Info */}
       <View style={styles.eventInfo}>
         <View style={styles.eventHeader}>
-          {event.tag && (
-            <View style={styles.tagContainer}>
-              <Text style={styles.tagText}>{event.tag}</Text>
-            </View>
+          <View style={styles.tagContainer}>
+            <Text style={styles.tagText}>{event.isPublic ? 'Public' : 'Private'}</Text>
+          </View>
+          {!isJoined && (
+            <TouchableOpacity
+              style={styles.joinButton}
+              onPress={handleJoin}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.joinButtonText}>Join</Text>
+            </TouchableOpacity>
           )}
-          <TouchableOpacity
-            style={[styles.joinButton, isJoined && styles.joinButtonJoined]}
-            onPress={handleJoin}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.joinButtonText, isJoined && styles.joinButtonTextJoined]}>
-              {isJoined ? 'Joined' : 'Join'}
-            </Text>
-          </TouchableOpacity>
+          {isJoined && (
+            <TouchableOpacity
+              style={styles.joinButtonJoined}
+              onPress={handleJoin}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.joinButtonTextJoined}>Joined</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <Text style={styles.eventTitle}>{event.title}</Text>
-        <Text style={styles.eventHost}>Hosted by • {event.host}</Text>
+        <Text style={styles.eventHost}>Hosted by - {event.host}</Text>
         <View style={styles.eventDateTime}>
-          <Ionicons name="calendar-outline" size={16} color="#4E4C57" />
+          <CalendarIcon width={16} height={16} color="#AF7DFF" />
           <Text style={styles.dateTimeText}>
             {event.date} | {event.time}
           </Text>
         </View>
+        {!event.isOnline && event.location && (
+          <View style={styles.eventLocation}>
+            <Ionicons name="location-outline" size={16} color="#AF7DFF" />
+            <Text style={styles.locationText}>{event.location}</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -202,11 +217,11 @@ const styles = StyleSheet.create({
   joinedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(175, 125, 255, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(116, 54, 215, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 20,
-    gap: 6,
+    gap: 4,
     alignSelf: 'flex-start',
   },
   joinedText: {
@@ -216,9 +231,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_600SemiBold',
   },
   onlineBadge: {
-    backgroundColor: 'rgba(175, 125, 255, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(116, 54, 215, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 20,
     alignSelf: 'flex-end',
   },
@@ -239,12 +254,12 @@ const styles = StyleSheet.create({
   },
   tagContainer: {
     backgroundColor: '#F5F5F5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   tagText: {
-    color: '#0D0A1B',
+    color: '#4E4C57',
     fontSize: 12,
     fontWeight: '500',
     fontFamily: 'Montserrat_500Medium',
@@ -284,8 +299,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginBottom: 6,
   },
   dateTimeText: {
+    fontSize: 14,
+    color: '#4E4C57',
+    fontFamily: 'Montserrat_400Regular',
+  },
+  eventLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  locationText: {
     fontSize: 14,
     color: '#4E4C57',
     fontFamily: 'Montserrat_400Regular',

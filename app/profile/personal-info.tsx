@@ -1,8 +1,8 @@
 import { StyleSheet, View, Text, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser, useUpdatePersonalInfo } from '@/hooks/queries/useAuth';
 import { showToast } from '@/utils/toast';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
@@ -10,11 +10,24 @@ import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
 export default function PersonalInfoScreen() {
   const user = useUser();
   const updatePersonalInfo = useUpdatePersonalInfo();
+  const insets = useSafeAreaInsets();
+
+  const defaultAboutMe = 'I love connecting with 👯people and sharing 💡ideas. Big fan of creativity, good coffee, and late-night brainstorming. Here to learn, create, and have fun doing it.';
 
   const [fullName, setFullName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '');
-  const [aboutMe, setAboutMe] = useState(user?.aboutMe || 'I love connecting with 👯people and sharing 💡ideas. Big fan of creativity, good coffee, and late-night brainstorming. Here to learn, create, and have fun doing it.');
+  const [aboutMe, setAboutMe] = useState(user?.aboutMe || defaultAboutMe);
+
+  // Update form fields when user data changes
+  useEffect(() => {
+    if (user) {
+      setFullName(user.name || '');
+      setEmail(user.email || '');
+      setDateOfBirth(user.dateOfBirth || '');
+      setAboutMe(user.aboutMe || defaultAboutMe);
+    }
+  }, [user]);
 
   const handleSave = async () => {
     try {
@@ -124,7 +137,7 @@ export default function PersonalInfoScreen() {
         </KeyboardAvoidingView>
 
         {/* Save Button */}
-        <View style={styles.buttonContainer}>
+        <View style={[styles.buttonContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <TouchableOpacity
             style={[styles.saveButton, updatePersonalInfo.isPending && styles.saveButtonDisabled]}
             onPress={handleSave}
@@ -234,7 +247,6 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',

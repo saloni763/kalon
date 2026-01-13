@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import Header from '@/components/Header';
 import Post from '@/components/Post-card';
-import { usePosts } from '@/hooks/queries/usePosts';
+import { usePosts, useToggleLike } from '@/hooks/queries/usePosts';
 import { showToast } from '@/utils/toast';
 
 import { Post as PostType } from '@/services/postService';
@@ -11,35 +11,39 @@ import * as Clipboard from 'expo-clipboard';
 
 export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState<'trending' | 'following'>('trending');
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [refreshing, setRefreshing] = useState(false);
 
   // Fetch posts using React Query
-  const { data, isLoading, error, refetch } = usePosts({
+  const { 
+    data, 
+    isLoading, 
+    error, 
+    refetch,
+    isRefetching,
+    isFetching 
+  } = usePosts({
     page: 1,
     limit: 20,
   });
 
+  // Like/unlike mutation
+  const toggleLikeMutation = useToggleLike();
+
+  // Best practice: Use isRefetching from React Query instead of manual state
   const handleRefresh = async () => {
-    setRefreshing(true);
     try {
       await refetch();
     } catch (error) {
       showToast.error('Failed to refresh posts');
-    } finally {
-      setRefreshing(false);
     }
   };
 
+  // Best practice: Use mutate instead of mutateAsync for fire-and-forget
+  // React Query handles optimistic updates automatically
   const toggleLike = (postId: string) => {
-    setLikedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(postId)) {
-        newSet.delete(postId);
-      } else {
-        newSet.add(postId);
-      }
-      return newSet;
+    toggleLikeMutation.mutate(postId, {
+      onError: (error: any) => {
+        showToast.error(error.message || 'Failed to update like');
+      },
     });
   };
 
@@ -141,7 +145,7 @@ export default function HomeScreen() {
             contentContainerStyle={styles.feedContent}
             refreshControl={
               <RefreshControl
-                refreshing={refreshing}
+                refreshing={isRefetching}
                 onRefresh={handleRefresh}
                 tintColor="#AF7DFF"
               />
@@ -151,7 +155,7 @@ export default function HomeScreen() {
               <Post
                 key={post.id}
                 post={post}
-                isLiked={likedPosts.has(post.id)}
+                isLiked={post.isLiked || false}
                 onLike={toggleLike}
                 onComment={handleComment}
                 onShare={handleShare}

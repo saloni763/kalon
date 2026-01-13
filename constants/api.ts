@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 declare const __DEV__: boolean;
 
 // These constants are only used in development mode
-const PHYSICAL_DEVICE_IP = '192.168.1.2';
+const PHYSICAL_DEVICE_IP = '192.168.1.4';
 const USE_PHYSICAL_DEVICE = true;
 
 const getApiBaseUrl = (): string => {
@@ -30,6 +30,8 @@ export const API_ROUTES = {
     LOGIN: '/api/auth/login',
     GOOGLE_LOGIN: '/api/auth/google-login',
     LOGOUT: '/api/auth/logout',
+    GET_CURRENT_USER: '/api/auth/me',
+    GET_USER_BY_ID: (userId: string) => `/api/auth/user/${userId}`,
     UPDATE_PERSONAL_INFO: '/api/auth/update-personal-info',
     FORGOT_PASSWORD: '/api/auth/forgot-password',
     VERIFY_OTP: '/api/auth/verify-otp',
@@ -38,5 +40,11 @@ export const API_ROUTES = {
   POSTS: {
     CREATE: '/api/posts/create',
     LIST: '/api/posts',
+    LIKE: (postId: string) => `/api/posts/${postId}/like`,
+  },
+  SEARCH: {
+    USERS: '/api/search/users',
+    POSTS: '/api/search/posts',
+    UNIFIED: '/api/search',
   },
 } as const;

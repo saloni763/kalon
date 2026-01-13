@@ -1,18 +1,19 @@
 import { StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, ActivityIndicator, RefreshControl, Modal, Pressable, Switch, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { usePosts } from '@/hooks/queries/usePosts';
+import { usePosts, useToggleLike } from '@/hooks/queries/usePosts';
 import Post from '@/components/Post-card';
 import { showToast } from '@/utils/toast';
 import { Post as PostType } from '@/services/postService';
+import { User, EducationEntry, RoleEntry } from '@/services/authService';
 import * as Clipboard from 'expo-clipboard';
 import VerifiedBadge from '@/components/ui/VerifiedBadge';
 import ShareProfileIcon from '@/components/ui/ShareProfileIcon';
 import EditProfileIcon from '@/components/ui/EditProfileIcon';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
-import { useUser } from '@/hooks/queries/useAuth';
+import { useUser, useUserById } from '@/hooks/queries/useAuth';
 import NotificationIcon from '@/components/ui/NotificationIcon';
 import CalendarIcon from '@/assets/icons/calendar.svg';
 import ShareIcon from '@/assets/icons/Share.svg';
@@ -25,14 +26,13 @@ import BlockIcon from '@/assets/icons/block-user.svg';
 import ReportIcon from '@/assets/icons/report.svg';
 import CopyLinkIcon from '@/assets/icons/copy-link.svg';
 import OptionsDrawer, { OptionItem } from '@/components/OptionsDrawer';
+import { skillCategories } from '@/constants/skills';
 
 export default function ProfileScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const currentUser = useUser();
   const isOwnProfile = currentUser?.id === userId;
   const [activeTab, setActiveTab] = useState<'Posts' | 'Events'>('Posts');
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [refreshing, setRefreshing] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false); // For others profile
   const [showNotificationModal, setShowNotificationModal] = useState(false);
@@ -40,34 +40,46 @@ export default function ProfileScreen() {
   const [showOptionsDrawer, setShowOptionsDrawer] = useState(false);
   const [showAboutProfileModal, setShowAboutProfileModal] = useState(false);
   const [showShareDrawer, setShowShareDrawer] = useState(false);
+  const [showSkillsInterestsModal, setShowSkillsInterestsModal] = useState(false);
+  const [showAllEducationsRolesModal, setShowAllEducationsRolesModal] = useState(false);
+
+  // Fetch user profile data
+  const { 
+    data: userData, 
+    isLoading: isLoadingUser, 
+    error: userError,
+    refetch: refetchUser 
+  } = useUserById(userId);
 
   // Fetch user posts
-  const { data, isLoading, error, refetch } = usePosts({
+  const { 
+    data, 
+    isLoading, 
+    error, 
+    refetch,
+    isRefetching 
+  } = usePosts({
     page: 1,
     limit: 20,
     userId: userId,
   });
 
+  // Like/unlike mutation
+  const toggleLikeMutation = useToggleLike();
+
   const handleRefresh = async () => {
-    setRefreshing(true);
     try {
-      await refetch();
+      await Promise.all([refetchUser(), refetch()]);
     } catch (error) {
-      showToast.error('Failed to refresh posts');
-    } finally {
-      setRefreshing(false);
+      showToast.error('Failed to refresh');
     }
   };
 
   const toggleLike = (postId: string) => {
-    setLikedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(postId)) {
-        newSet.delete(postId);
-      } else {
-        newSet.add(postId);
-      }
-      return newSet;
+    toggleLikeMutation.mutate(postId, {
+      onError: (error: any) => {
+        showToast.error(error.message || 'Failed to update like');
+      },
     });
   };
 
@@ -130,20 +142,27 @@ export default function ProfileScreen() {
     console.log('Report post:', postId);
   };
 
-  // Get user info from first post or use defaults
-  const userInfo = data?.posts[0]?.userId || {
-    _id: userId || '',
+  // Always use userData from useUserById when available (for both own and other profiles)
+  // This ensures we get the latest data including education and roles
+  // Fallback to currentUser only if userData is not loaded yet and it's own profile
+  const userInfo = userData || (isOwnProfile ? currentUser : null);
+  
+  // Fallback to defaults if user data is not available
+  const displayUser = userInfo || {
+    id: userId || '',
     name: 'User',
     email: 'user@example.com',
     picture: undefined,
   };
 
-  const username = userInfo.email
-    ? `@${userInfo.email.split('@')[0]}`
+
+  const username = displayUser.email
+    ? `@${displayUser.email.split('@')[0]}`
     : '@user';
 
   // Helper function to get initials from name
   const getInitials = (name: string): string => {
+    if (!name) return 'U';
     return name
       .split(' ')
       .map(word => word[0])
@@ -151,6 +170,34 @@ export default function ProfileScreen() {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  // Helper function to get skill display name from ID
+  const getSkillDisplayName = (skillId: string): string => {
+    for (const category of skillCategories) {
+      const skill = category.items.find(item => item.id === skillId);
+      if (skill) return skill.name;
+    }
+    // If not found, return the ID as fallback (capitalize first letter)
+    return skillId.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  // Show loading state while fetching user data
+  if (isLoadingUser && !userInfo) {
+    return (
+      <View style={styles.container}>
+        <SafeAreaView style={styles.content} edges={['top']}>
+          <View style={styles.topNav}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <BackArrowCircleIcon width={26} height={26} color="#0D0A1B" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#AF7DFF" />
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   const handleFollowToggle = () => {
     setIsFollowing(!isFollowing);
@@ -167,9 +214,9 @@ export default function ProfileScreen() {
     try {
       const profileLink = `https://www.kalon.net/${username}`;
       const result = await Share.share({
-        message: `Check out ${userInfo.name}'s profile on Kalon: ${profileLink}`,
+        message: `Check out ${displayUser.name}'s profile on Kalon: ${profileLink}`,
         url: profileLink,
-        title: `${userInfo.name}'s Profile`,
+        title: `${displayUser.name}'s Profile`,
       });
       
       if (result.action === Share.sharedAction) {
@@ -279,7 +326,7 @@ export default function ProfileScreen() {
           style={styles.scrollView}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
+              refreshing={isRefetching || (isLoadingUser && !!userInfo)}
               onRefresh={handleRefresh}
               tintColor="#AF7DFF"
             />
@@ -291,7 +338,7 @@ export default function ProfileScreen() {
               <View style={styles.profileHeaderLeft}>
                 <View>
                   <View style={styles.nameRow}>
-                    <Text style={styles.userName}>{userInfo.name}</Text>
+                    <Text style={styles.userName}>{displayUser.name || 'User'}</Text>
                     <View style={styles.verifiedBadge}>
                       <VerifiedBadge width={16} height={16} color="#7436D7" />
                     </View>
@@ -299,12 +346,19 @@ export default function ProfileScreen() {
                   <Text style={[styles.userHandle, !isOwnProfile && styles.userHandleCompact]}>{username}</Text>
                   
                   {/* Role & Education Section - Only show for own profile */}
-                  {isOwnProfile && (
+                  {isOwnProfile && (displayUser.roles?.length > 0 || displayUser.educations?.length > 0) && (
                     <View style={styles.roleEducationSection}>
                       <Text style={styles.roleEducationText}>
-                        Senior UX Designer · Adobe Inc. | University of California
+                        {displayUser.roles?.[0]?.currentRole && displayUser.roles[0]?.companyOrganisation 
+                          ? `${displayUser.roles[0].currentRole} · ${displayUser.roles[0].companyOrganisation}`
+                          : ''}
+                        {displayUser.educations?.[0]?.schoolUniversity 
+                          ? `${displayUser.roles?.[0]?.currentRole ? ' | ' : ''}${displayUser.educations[0].schoolUniversity}`
+                          : ''}
                       </Text>
-                      <Text style={styles.locationText}>New Jersey, USA</Text>
+                      {displayUser.roles?.[0]?.location && (
+                        <Text style={styles.locationText}>{displayUser.roles[0].location}</Text>
+                      )}
                     </View>
                   )}
 
@@ -326,15 +380,15 @@ export default function ProfileScreen() {
                 </View>
               </View>
               <View style={styles.profileImageContainer}>
-                {userInfo.picture ? (
+                {displayUser.picture ? (
                   <Image
-                    source={{ uri: userInfo.picture }}
+                    source={{ uri: displayUser.picture }}
                     style={styles.profileImage}
                   />
                 ) : (
                   <View style={styles.profileImagePlaceholder}>
                     <Text style={styles.profileImageText}>
-                      {getInitials(userInfo.name)}
+                      {getInitials(displayUser.name || 'User')}
                     </Text>
                   </View>
                 )}
@@ -416,22 +470,24 @@ export default function ProfileScreen() {
             )}
 
             {/* About Me Section */}
-            <View style={styles.aboutSection}>
-              <View style={styles.aboutHeader}>
-                <Text style={styles.aboutTitle}>About Me</Text>
-                {isOwnProfile && (
-                <TouchableOpacity onPress={() => setShowDetailsModal(true)}>
-                  <Text style={styles.viewDetailsText}>View Details</Text>
-                </TouchableOpacity>
-                )}
+            {displayUser.aboutMe && (
+              <View style={styles.aboutSection}>
+                <View style={styles.aboutHeader}>
+                  <Text style={styles.aboutTitle}>About Me</Text>
+                  {isOwnProfile && (
+                  <TouchableOpacity onPress={() => setShowDetailsModal(true)}>
+                    <Text style={styles.viewDetailsText}>View Details</Text>
+                  </TouchableOpacity>
+                  )}
+                </View>
+                <Text style={styles.aboutText}>
+                  {displayUser.aboutMe}
+                </Text>
               </View>
-              <Text style={styles.aboutText}>
-                I love connecting with 👯people and sharing 💡ideas. Big fan of creativity, good coffee, and late-night brainstorming. Here to learn, create, and have fun doing it.
-              </Text>
-            </View>
+            )}
 
             {/* Education & Role Section - Only show for own profile */}
-            {isOwnProfile && (
+            {isOwnProfile && (displayUser.educations?.length > 0 || displayUser.roles?.length > 0) && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionIconContainer}>
@@ -440,18 +496,31 @@ export default function ProfileScreen() {
                   <Text style={styles.sectionTitle}>Education & Role</Text>
                 </View>
                 <View style={styles.educationContent}>
-                  <Text style={styles.educationText}>
-                    B.Sc. Computer Science • University of California{'\n'}New Jersey, USA
-                  </Text>
-                  <TouchableOpacity>
-                    <Text style={styles.moreText}>+2 more</Text>
-                  </TouchableOpacity>
+                  {displayUser.educations?.[0] && (
+                    <Text style={styles.educationText}>
+                      {displayUser.educations[0].degreeProgram} • {displayUser.educations[0].schoolUniversity}
+                      {displayUser.educations[0].startYear && `\n${displayUser.educations[0].startYear}${displayUser.educations[0].endYear ? ` - ${displayUser.educations[0].endYear}` : displayUser.educations[0].currentlyEnrolled ? ' - Present' : ''}`}
+                    </Text>
+                  )}
+                  {displayUser.roles?.[0] && (
+                    <Text style={styles.educationText}>
+                      {displayUser.roles[0].currentRole} • {displayUser.roles[0].companyOrganisation}
+                      {displayUser.roles[0].location && `\n${displayUser.roles[0].location}`}
+                    </Text>
+                  )}
+                  {(displayUser.educations?.length > 1 || displayUser.roles?.length > 1) && (
+                    <TouchableOpacity onPress={() => setShowSkillsInterestsModal(true)} activeOpacity={0.7}>
+                      <Text style={styles.moreText}>
+                        +{((displayUser.educations?.length || 0) + (displayUser.roles?.length || 0) - 2)} more
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             )}
 
             {/* Skills & Interests Section - Only show for own profile */}
-            {isOwnProfile && (
+            {isOwnProfile && displayUser.skills && displayUser.skills.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionIconContainer}>
@@ -462,19 +531,17 @@ export default function ProfileScreen() {
                 <View style={styles.skillsContainer}>
                   <View style={styles.skillsRow}>
                     <View style={styles.skillsTagsContainer}>
-                      <View style={styles.skillTag}>
-                        <Text style={styles.skillText}>👥 Community</Text>
-                      </View>
-                      <View style={styles.skillTag}>
-                        <Text style={styles.skillText}>🎨 Design</Text>
-                      </View>
-                      <View style={styles.skillTag}>
-                        <Text style={styles.skillText}>🧵 Craft</Text>
-                      </View>
+                      {displayUser.skills.slice(0, 3).map((skill: string, index: number) => (
+                        <View key={index} style={styles.skillTag}>
+                          <Text style={styles.skillText}>{getSkillDisplayName(skill)}</Text>
+                        </View>
+                      ))}
                     </View>
-                    <TouchableOpacity>
-                      <Text style={styles.moreText}>+3 more</Text>
-                    </TouchableOpacity>
+                    {displayUser.skills.length > 3 && (
+                      <TouchableOpacity onPress={() => setShowSkillsInterestsModal(true)} activeOpacity={0.7}>
+                        <Text style={styles.moreText}>+{displayUser.skills.length - 3} more</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               </View>
@@ -518,7 +585,7 @@ export default function ProfileScreen() {
                     <Post
                       key={post.id}
                       post={post}
-                      isLiked={likedPosts.has(post.id)}
+                      isLiked={post.isLiked || false}
                       onLike={toggleLike}
                       onComment={handleComment}
                       onShare={handleShare}
@@ -587,88 +654,90 @@ export default function ProfileScreen() {
             {/* Modal Scrollable Content */}
             <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={true}>
               {/* About Me Section */}
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>About Me</Text>
-                <Text style={styles.modalAboutText}>
-                  I love connecting with 👯people and sharing 💡ideas. Big fan of creativity, good coffee, and late-night brainstorming. Here to learn, create, and have fun doing it.
-                </Text>
-              </View>
+              {displayUser.aboutMe && (
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>About Me</Text>
+                  <Text style={styles.modalAboutText}>
+                    {displayUser.aboutMe}
+                  </Text>
+                </View>
+              )}
 
               {/* Education & Role Section */}
-              <View style={styles.modalSection}>
-                <View style={styles.modalSectionHeader}>
-                  <View style={styles.modalSectionIconContainer}>
-                    <Ionicons name="menu" size={16} color="#AF7DFF" />
+              {(displayUser.educations?.length > 0 || displayUser.roles?.length > 0) && (
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <View style={styles.modalSectionIconContainer}>
+                      <Ionicons name="menu" size={16} color="#AF7DFF" />
+                    </View>
+                    <Text style={styles.modalSectionTitle}>Education & Role</Text>
                   </View>
-                  <Text style={styles.modalSectionTitle}>Education & Role</Text>
-                </View>
-                
-                {/* Education Entry */}
-                <View style={styles.modalListItem}>
-                  <Text style={styles.modalListItemText}>
-                    B.Sc. Computer Science • University of California
-                  </Text>
-                  <Text style={styles.modalListItemSubtext}>2014</Text>
-                </View>
-                <View style={styles.modalDivider} />
+                  
+                  {/* Education Entries */}
+                  {displayUser.educations?.map((edu: EducationEntry, index: number) => (
+                    <View key={`edu-${index}`}>
+                      <View style={styles.modalListItem}>
+                        <Text style={styles.modalListItemText}>
+                          {edu.degreeProgram} • {edu.schoolUniversity}
+                        </Text>
+                        <Text style={styles.modalListItemSubtext}>
+                          {edu.startYear}{edu.endYear ? ` - ${edu.endYear}` : edu.currentlyEnrolled ? ' - Present' : ''}
+                        </Text>
+                        {edu.currentlyEnrolled && (
+                          <Text style={styles.modalCurrentWorking}>Currently Enrolled</Text>
+                        )}
+                      </View>
+                      {index < (displayUser.educations?.length || 0) - 1 && <View style={styles.modalDivider} />}
+                    </View>
+                  ))}
 
-                {/* Role Entry 1 */}
-                <View style={styles.modalListItem}>
-                  <Text style={styles.modalListItemText}>
-                    Senior UX Designer • Adobe Inc
-                  </Text>
-                  <Text style={styles.modalListItemSubtext}>New Jersey, USA</Text>
-                  <Text style={styles.modalCurrentWorking}>Currently Working here</Text>
+                  {/* Role Entries */}
+                  {displayUser.roles?.map((role: RoleEntry, index: number) => (
+                    <View key={`role-${index}`}>
+                      {(displayUser.educations?.length > 0 || index > 0) && <View style={styles.modalDivider} />}
+                      <View style={styles.modalListItem}>
+                        <Text style={styles.modalListItemText}>
+                          {role.currentRole} • {role.companyOrganisation}
+                        </Text>
+                        {role.location && (
+                          <Text style={styles.modalListItemSubtext}>{role.location}</Text>
+                        )}
+                        {role.startDate && (
+                          <Text style={styles.modalListItemSubtext}>
+                            {role.endDate 
+                              ? `From ${new Date(role.startDate).getFullYear()} - ${new Date(role.endDate).getFullYear()}`
+                              : `From ${new Date(role.startDate).getFullYear()} - Present`}
+                            {role.location ? ` | ${role.location}` : ''}
+                          </Text>
+                        )}
+                        {role.currentlyWorking && (
+                          <Text style={styles.modalCurrentWorking}>Currently Working here</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
                 </View>
-                <View style={styles.modalDivider} />
-
-                {/* Role Entry 2 */}
-                <View style={styles.modalListItem}>
-                  <Text style={styles.modalListItemText}>
-                    Lead Product Designer • Airbnb
-                  </Text>
-                  <Text style={styles.modalListItemSubtext}>
-                    From 2016 - 2018 | New Jersey, USA
-                  </Text>
-                </View>
-              </View>
+              )}
 
               {/* Skills & Interests Section */}
-              <View style={styles.modalSection}>
-                <View style={styles.modalSectionHeader}>
-                  <View style={styles.modalSectionIconContainer}>
-                    <Ionicons name="sparkles" size={16} color="#AF7DFF" />
+              {displayUser.skills && displayUser.skills.length > 0 && (
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <View style={styles.modalSectionIconContainer}>
+                      <Ionicons name="sparkles" size={16} color="#AF7DFF" />
+                    </View>
+                    <Text style={styles.modalSectionTitle}>Skills & Interests</Text>
                   </View>
-                  <Text style={styles.modalSectionTitle}>Skills & Interests</Text>
-                </View>
-                
-                <View style={styles.modalSkillsContainer}>
-                  <View style={styles.modalSkillTag}>
-                    <Ionicons name="people" size={14} color="#FFFFFF" />
-                    <Text style={styles.modalSkillText}>Community</Text>
-                  </View>
-                  <View style={styles.modalSkillTag}>
-                    <Ionicons name="color-palette" size={14} color="#FFFFFF" />
-                    <Text style={styles.modalSkillText}>Design</Text>
-                  </View>
-                  <View style={styles.modalSkillTag}>
-                    <Ionicons name="construct" size={14} color="#FFFFFF" />
-                    <Text style={styles.modalSkillText}>Craft</Text>
-                  </View>
-                  <View style={styles.modalSkillTag}>
-                    <Ionicons name="game-controller" size={14} color="#FFFFFF" />
-                    <Text style={styles.modalSkillText}>Chess</Text>
-                  </View>
-                  <View style={styles.modalSkillTag}>
-                    <Ionicons name="barbell" size={14} color="#FFFFFF" />
-                    <Text style={styles.modalSkillText}>Fitness/Gym</Text>
-                  </View>
-                  <View style={styles.modalSkillTag}>
-                    <Ionicons name="brush" size={14} color="#FFFFFF" />
-                    <Text style={styles.modalSkillText}>Artist/Creator</Text>
+                  
+                  <View style={styles.modalSkillsContainer}>
+                    {displayUser.skills.map((skill: string, index: number) => (
+                      <View key={index} style={styles.modalSkillTag}>
+                        <Text style={styles.modalSkillText}>{getSkillDisplayName(skill)}</Text>
+                      </View>
+                    ))}
                   </View>
                 </View>
-              </View>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -741,21 +810,21 @@ export default function ProfileScreen() {
             {/* User Info Section */}
             <View style={styles.aboutProfileModalUserSection}>
               <View style={styles.aboutProfileModalImageContainer}>
-                {userInfo.picture ? (
+                {displayUser.picture ? (
                   <Image
-                    source={{ uri: userInfo.picture }}
+                    source={{ uri: displayUser.picture }}
                     style={styles.aboutProfileModalImage}
                   />
                 ) : (
                   <View style={styles.aboutProfileModalImagePlaceholder}>
                     <Text style={styles.aboutProfileModalImageText}>
-                      {getInitials(userInfo.name)}
+                      {getInitials(displayUser.name || 'User')}
                     </Text>
                   </View>
                 )}
               </View>
               <View style={styles.aboutProfileModalUserInfo}>
-                <Text style={styles.aboutProfileModalName}>{userInfo.name}</Text>
+                <Text style={styles.aboutProfileModalName}>{displayUser.name || 'User'}</Text>
                 <Text style={styles.aboutProfileModalUsername}>{username}</Text>
               </View>
             </View>
@@ -764,10 +833,18 @@ export default function ProfileScreen() {
             <View style={styles.aboutProfileModalSeparator} />
 
             {/* Joined Section */}
-            <View style={styles.aboutProfileModalJoinedSection}>
-              <Text style={styles.aboutProfileModalJoinedLabel}>Joined</Text>
-              <Text style={styles.aboutProfileModalJoinedDate}>20 May 2020</Text>
-            </View>
+            {displayUser.createdAt && (
+              <View style={styles.aboutProfileModalJoinedSection}>
+                <Text style={styles.aboutProfileModalJoinedLabel}>Joined</Text>
+                <Text style={styles.aboutProfileModalJoinedDate}>
+                  {new Date(displayUser.createdAt).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -798,21 +875,21 @@ export default function ProfileScreen() {
             {/* User Profile Section */}
             <View style={styles.shareDrawerUserSection}>
               <View style={styles.shareDrawerImageContainer}>
-                {userInfo.picture ? (
+                {displayUser.picture ? (
                   <Image
-                    source={{ uri: userInfo.picture }}
+                    source={{ uri: displayUser.picture }}
                     style={styles.shareDrawerImage}
                   />
                 ) : (
                   <View style={styles.shareDrawerImagePlaceholder}>
                     <Text style={styles.shareDrawerImageText}>
-                      {getInitials(userInfo.name)}
+                      {getInitials(displayUser.name || 'User')}
                     </Text>
                   </View>
                 )}
               </View>
               <View style={styles.shareDrawerUserInfo}>
-                <Text style={styles.shareDrawerUserName}>{userInfo.name}</Text>
+                <Text style={styles.shareDrawerUserName}>{displayUser.name || 'User'}</Text>
                 <Text style={styles.shareDrawerUrl}>https://www.kalon.net/{username}</Text>
               </View>
             </View>
@@ -843,6 +920,206 @@ export default function ProfileScreen() {
               <Text style={styles.shareDrawerCopyButtonText}>Copy Link</Text>
               <CopyLinkIcon width={20} height={20} color="#AF7DFF" />
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Skills & Interests Modal */}
+      <Modal
+        visible={showSkillsInterestsModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowSkillsInterestsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setShowSkillsInterestsModal(false)}
+          />
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Skills & Interests</Text>
+              <TouchableOpacity
+                onPress={() => setShowSkillsInterestsModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#0D0A1B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Scrollable Content */}
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={true}>
+              {/* Skills Section */}
+              {displayUser.skills && displayUser.skills.length > 0 && (
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <View style={styles.modalSectionIconContainer}>
+                      <Ionicons name="sparkles" size={16} color="#AF7DFF" />
+                    </View>
+                    <Text style={styles.modalSectionTitle}>Skills</Text>
+                  </View>
+                  
+                  <View style={styles.modalSkillsContainer}>
+                    {displayUser.skills.map((skill: string, index: number) => (
+                      <View key={index} style={styles.modalSkillTag}>
+                        <Text style={styles.modalSkillText}>{skill}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Goals/Interests Section */}
+              {displayUser.goals && displayUser.goals.length > 0 && (
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <View style={styles.modalSectionIconContainer}>
+                      <Ionicons name="flag-outline" size={16} color="#AF7DFF" />
+                    </View>
+                    <Text style={styles.modalSectionTitle}>Goals & Interests</Text>
+                  </View>
+                  
+                  <View style={styles.modalSkillsContainer}>
+                    {displayUser.goals.map((goal: string, index: number) => (
+                      <View key={index} style={styles.modalSkillTag}>
+                        <Text style={styles.modalSkillText}>{getSkillDisplayName(goal)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Empty State */}
+              {(!displayUser.skills || displayUser.skills.length === 0) && 
+               (!displayUser.goals || displayUser.goals.length === 0) && (
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalEmptyText}>No skills or interests added yet.</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* All Educations & Roles Modal */}
+      <Modal
+        visible={showAllEducationsRolesModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAllEducationsRolesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setShowAllEducationsRolesModal(false)}
+          />
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Education & Role</Text>
+              <TouchableOpacity
+                onPress={() => setShowAllEducationsRolesModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#0D0A1B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Scrollable Content */}
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={true}>
+              {/* Education Entries */}
+              {displayUser.educations && displayUser.educations.length > 0 && (
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <View style={styles.modalSectionIconContainer}>
+                      <Ionicons name="school-outline" size={16} color="#AF7DFF" />
+                    </View>
+                    <Text style={styles.modalSectionTitle}>Education</Text>
+                  </View>
+                  
+                  {displayUser.educations.map((edu: EducationEntry, index: number) => (
+                    <View key={`edu-${index}`}>
+                      <View style={styles.modalListItem}>
+                        <Text style={styles.modalListItemText}>
+                          {edu.degreeProgram} • {edu.schoolUniversity}
+                        </Text>
+                        <Text style={styles.modalListItemSubtext}>
+                          {edu.startYear}{edu.endYear ? ` - ${edu.endYear}` : edu.currentlyEnrolled ? ' - Present' : ''}
+                        </Text>
+                        {edu.currentlyEnrolled && (
+                          <Text style={styles.modalCurrentWorking}>Currently Enrolled</Text>
+                        )}
+                      </View>
+                      {index < (displayUser.educations?.length || 0) - 1 && <View style={styles.modalDivider} />}
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Role Entries */}
+              {displayUser.roles && displayUser.roles.length > 0 && (
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <View style={styles.modalSectionIconContainer}>
+                      <Ionicons name="briefcase-outline" size={16} color="#AF7DFF" />
+                    </View>
+                    <Text style={styles.modalSectionTitle}>Roles</Text>
+                  </View>
+                  
+                  {displayUser.roles.map((role: RoleEntry, index: number) => (
+                    <View key={`role-${index}`}>
+                      {index > 0 && <View style={styles.modalDivider} />}
+                      <View style={styles.modalListItem}>
+                        <Text style={styles.modalListItemText}>
+                          {role.currentRole} • {role.companyOrganisation}
+                        </Text>
+                        {role.location && (
+                          <Text style={styles.modalListItemSubtext}>{role.location}</Text>
+                        )}
+                        {role.startDate && (
+                          <Text style={styles.modalListItemSubtext}>
+                            {(() => {
+                              const startDate = role.startDate.includes('-') 
+                                ? role.startDate 
+                                : (() => {
+                                    const parts = role.startDate.split(' / ');
+                                    return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : role.startDate;
+                                  })();
+                              const endDate = role.endDate 
+                                ? (role.endDate.includes('-') 
+                                    ? role.endDate 
+                                    : (() => {
+                                        const parts = role.endDate.split(' / ');
+                                        return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : role.endDate;
+                                      })())
+                                : null;
+                              const startYear = new Date(startDate).getFullYear();
+                              const endYear = endDate ? new Date(endDate).getFullYear() : null;
+                              return endYear 
+                                ? `From ${startYear} - ${endYear}`
+                                : `From ${startYear} - Present`;
+                            })()}
+                            {role.location ? ` | ${role.location}` : ''}
+                          </Text>
+                        )}
+                        {role.currentlyWorking && (
+                          <Text style={styles.modalCurrentWorking}>Currently Working here</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Empty State */}
+              {(!displayUser.educations || displayUser.educations.length === 0) && 
+               (!displayUser.roles || displayUser.roles.length === 0) && (
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalEmptyText}>No education or role information available.</Text>
+                </View>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1408,6 +1685,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '500',
     fontFamily: 'Montserrat_500Medium',
+  },
+  modalEmptyText: {
+    fontSize: 14,
+    color: '#4E4C57',
+    textAlign: 'center',
+    fontFamily: 'Montserrat_400Regular',
+    paddingVertical: 20,
   },
   // Notification Modal Styles
   notificationModalOverlay: {

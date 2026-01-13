@@ -1,10 +1,13 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, TextInput } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import SearchIcon from '@/components/ui/SearchIcon';
 import VerifiedBadge from '@/components/ui/VerifiedBadge';
+import { SearchUser, SearchPost } from '@/services/searchService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSearchUsers, useSearchPosts } from '@/hooks/queries/useSearch';
 
 type TabType = 'recent' | 'people' | 'post' | 'events';
 
@@ -18,44 +21,8 @@ interface RecentSearchItem {
   query?: string;
 }
 
-interface User {
-  id: string;
-  name: string;
-  location: string;
-  picture?: string;
-  isVerified: boolean;
-  isFollowing: boolean;
-}
-
-// Mock data for recent searches
-const mockRecentSearches: RecentSearchItem[] = [
-  { id: '1', type: 'profile', name: 'Alex', username: '@studybuddy_alex', picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', isVerified: true },
-  { id: '2', type: 'query', query: 'Psychology 101 Study Group' },
-  { id: '3', type: 'query', query: '#InternshipAlert' },
-  { id: '4', type: 'query', query: 'Resume Building Workshop' },
-  { id: '5', type: 'query', query: 'Resume Building Workshop' },
-  { id: '6', type: 'profile', name: 'codingclub', username: '@codingclub_official', picture: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=150', isVerified: true },
-  { id: '7', type: 'query', query: '#ExamTips' },
-];
-
-// Mock data for suggested people
-const mockSuggestedPeople: User[] = [
-  { id: '1', name: 'Antonio Ruiz', location: 'Spain', picture: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', isVerified: false, isFollowing: false },
-  { id: '2', name: 'Kathleen Ritchie', location: 'LA', picture: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', isVerified: false, isFollowing: false },
-  { id: '3', name: 'Alan Raffaele', location: 'Waynesboro', picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', isVerified: false, isFollowing: false },
-];
-
-// Mock data for search results
-const mockSearchResults: User[] = [
-  { id: '1', name: 'Alex Morgan', location: 'USA', picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', isVerified: false, isFollowing: false },
-  { id: '2', name: 'Andrew Lee', location: 'Canada', picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', isVerified: true, isFollowing: false },
-  { id: '3', name: 'Amara Singh', location: 'India', picture: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150', isVerified: false, isFollowing: false },
-  { id: '4', name: 'Aaron Kim', location: 'South Korea', picture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150', isVerified: true, isFollowing: true },
-  { id: '5', name: 'Anika Patel', location: 'UK', picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', isVerified: false, isFollowing: false },
-  { id: '6', name: 'Adele Nguyen', location: 'Vietnam', picture: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=150', isVerified: false, isFollowing: false },
-  { id: '7', name: 'Anastasia Georgiou', location: 'Greece', picture: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=150', isVerified: false, isFollowing: true },
-  { id: '8', name: 'Ayaka Tanaka', location: 'Japan', picture: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150', isVerified: false, isFollowing: false },
-];
+const RECENT_SEARCHES_KEY = '@kalon_recent_searches';
+const MAX_RECENT_SEARCHES = 10;
 
 const getInitials = (name: string): string => {
   return name
@@ -69,15 +36,88 @@ const getInitials = (name: string): string => {
 export default function SearchScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('recent');
   const [searchQuery, setSearchQuery] = useState('');
-  const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(mockRecentSearches);
-  const [suggestedPeople, setSuggestedPeople] = useState<User[]>(mockSuggestedPeople);
-  const [searchResults, setSearchResults] = useState<User[]>(mockSearchResults);
+  const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>([]);
+  const [suggestedPeople, setSuggestedPeople] = useState<SearchUser[]>([]);
 
-  const handleRemoveRecent = (id: string) => {
-    setRecentSearches(prev => prev.filter(item => item.id !== id));
+  // React Query hooks for search
+  const hasSearchQuery = searchQuery.trim().length > 0;
+  const shouldSearchUsers = activeTab === 'people' && hasSearchQuery;
+  const shouldSearchPosts = activeTab === 'post' && hasSearchQuery;
+
+  const {
+    data: usersData,
+    isLoading: isLoadingUsers,
+    error: usersError,
+  } = useSearchUsers(searchQuery, 1, 20, shouldSearchUsers);
+
+  const {
+    data: postsData,
+    isLoading: isLoadingPosts,
+    error: postsError,
+  } = useSearchPosts(searchQuery, 1, 20, shouldSearchPosts);
+
+  const searchResults = usersData?.users || [];
+  const postResults = postsData?.posts || [];
+  const error = usersError?.message || postsError?.message || null;
+
+  // Load recent searches from storage on mount
+  useEffect(() => {
+    loadRecentSearches();
+  }, []);
+
+  const loadRecentSearches = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(RECENT_SEARCHES_KEY);
+      if (stored) {
+        setRecentSearches(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading recent searches:', error);
+    }
+  };
+
+  const saveRecentSearch = async (item: RecentSearchItem) => {
+    try {
+      const updated = [item, ...recentSearches.filter(i => i.id !== item.id)].slice(0, MAX_RECENT_SEARCHES);
+      setRecentSearches(updated);
+      await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+    } catch (error) {
+      console.error('Error saving recent search:', error);
+    }
+  };
+
+  // Save to recent searches when search is performed
+  useEffect(() => {
+    if (hasSearchQuery && (usersData?.users.length || postsData?.posts.length)) {
+      const query = searchQuery.trim();
+      // Check if this query is already in recent searches to avoid duplicates
+      const isDuplicate = recentSearches.some(
+        item => item.type === 'query' && item.query === query
+      );
+      
+      if (!isDuplicate) {
+        saveRecentSearch({
+          id: Date.now().toString(),
+          type: 'query',
+          query,
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usersData, postsData]);
+
+  const handleRemoveRecent = async (id: string) => {
+    try {
+      const updated = recentSearches.filter(item => item.id !== id);
+      setRecentSearches(updated);
+      await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+    } catch (error) {
+      console.error('Error removing recent search:', error);
+    }
   };
 
   const handleFollowToggle = (userId: string, isSuggested: boolean = false) => {
+    // TODO: Implement actual follow/unfollow API call with mutation
     if (isSuggested) {
       setSuggestedPeople(prev =>
         prev.map(user =>
@@ -86,15 +126,9 @@ export default function SearchScreen() {
             : user
         )
       );
-    } else {
-      setSearchResults(prev =>
-        prev.map(user =>
-          user.id === userId
-            ? { ...user, isFollowing: !user.isFollowing }
-            : user
-        )
-      );
     }
+    // Note: For search results, we'd need to invalidate the query cache
+    // after a successful follow/unfollow mutation
   };
 
   const handleUserPress = (userId: string) => {
@@ -102,7 +136,7 @@ export default function SearchScreen() {
   };
 
   const handleSearchItemPress = (item: RecentSearchItem) => {
-    if (item.type === 'profile' && item.name) {
+    if (item.type === 'profile' && item.id) {
       // Navigate to profile
       router.push(`/profile/${item.id}` as any);
     } else if (item.type === 'query' && item.query) {
@@ -184,14 +218,21 @@ export default function SearchScreen() {
   };
 
   const renderPeopleTab = () => {
-    const hasSearchQuery = searchQuery.trim().length > 0;
-
     return (
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+        
         {!hasSearchQuery && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Suggested People</Text>
-            {suggestedPeople.map((user) => (
+            {suggestedPeople.length === 0 ? (
+              <Text style={styles.emptyStateText}>No suggestions available</Text>
+            ) : (
+              suggestedPeople.map((user) => (
               <View key={user.id} style={styles.userItem}>
                 <TouchableOpacity
                   style={styles.userInfo}
@@ -235,14 +276,25 @@ export default function SearchScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-            ))}
+              ))
+            )}
           </View>
         )}
 
         {hasSearchQuery && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Search Result</Text>
-            {searchResults.map((user) => (
+            <Text style={styles.sectionTitle}>Search Results</Text>
+            {isLoadingUsers ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#7436D7" />
+                <Text style={styles.loadingText}>Searching...</Text>
+              </View>
+            ) : searchResults.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No users found</Text>
+              </View>
+            ) : (
+              searchResults.map((user) => (
               <View key={user.id} style={styles.userItem}>
                 <TouchableOpacity
                   style={styles.userInfo}
@@ -293,7 +345,8 @@ export default function SearchScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-            ))}
+              ))
+            )}
           </View>
         )}
       </ScrollView>
@@ -301,10 +354,85 @@ export default function SearchScreen() {
   };
 
   const renderPostTab = () => {
+    if (!hasSearchQuery) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>Enter a search query or hashtag to find posts</Text>
+        </View>
+      );
+    }
+
     return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>Post search coming soon</Text>
-      </View>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+        
+        {isLoadingPosts ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#7436D7" />
+            <Text style={styles.loadingText}>Searching posts...</Text>
+          </View>
+        ) : postResults.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No posts found</Text>
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Search Results</Text>
+            {postResults.map((post) => (
+              <TouchableOpacity
+                key={post.id}
+                style={styles.postItem}
+                onPress={() => {
+                  // TODO: Navigate to post detail or handle post press
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.postHeader}>
+                  <View style={styles.profileImageContainer}>
+                    {post.userId.picture ? (
+                      <Image
+                        source={{ uri: post.userId.picture }}
+                        style={styles.profileImage}
+                      />
+                    ) : (
+                      <View style={styles.profileImagePlaceholder}>
+                        <Text style={styles.profileImageText}>
+                          {getInitials(post.userId.name)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.postUserInfo}>
+                    <Text style={styles.postUserName}>{post.userId.name}</Text>
+                    <Text style={styles.postDate}>
+                      {new Date(post.createdAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.postContent}>{post.content}</Text>
+                <View style={styles.postStats}>
+                  <View style={styles.postStatItem}>
+                    <Ionicons name="heart" size={16} color={post.isLiked ? "#7436D7" : "#4E4C57"} />
+                    <Text style={styles.postStatText}>{post.likes}</Text>
+                  </View>
+                  <View style={styles.postStatItem}>
+                    <Ionicons name="chatbubble-outline" size={16} color="#4E4C57" />
+                    <Text style={styles.postStatText}>{post.replies}</Text>
+                  </View>
+                  <View style={styles.postStatItem}>
+                    <Ionicons name="share-outline" size={16} color="#4E4C57" />
+                    <Text style={styles.postStatText}>{post.shares}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
     );
   };
 
@@ -659,6 +787,79 @@ const styles = StyleSheet.create({
   },
   followingButtonText: {
     color: '#AF7DFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#4E4C57',
+    fontFamily: 'Montserrat_400Regular',
+  },
+  errorContainer: {
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    marginHorizontal: 20,
+    marginTop: 16,
+    borderRadius: 8,
+  },
+  errorText: {
+    color: '#C62828',
+    fontSize: 14,
+    fontFamily: 'Montserrat_400Regular',
+  },
+  postItem: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  postHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  postUserInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  postUserName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0D0A1B',
+    fontFamily: 'Montserrat_600SemiBold',
+  },
+  postDate: {
+    fontSize: 12,
+    color: '#4E4C57',
+    marginTop: 2,
+    fontFamily: 'Montserrat_400Regular',
+  },
+  postContent: {
+    fontSize: 15,
+    color: '#0D0A1B',
+    lineHeight: 22,
+    marginBottom: 12,
+    fontFamily: 'Montserrat_400Regular',
+  },
+  postStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  postStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  postStatText: {
+    fontSize: 14,
+    color: '#4E4C57',
+    fontFamily: 'Montserrat_400Regular',
   },
 });
 

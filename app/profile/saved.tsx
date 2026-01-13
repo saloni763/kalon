@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Post from '@/components/Post-card';
 import Event, { EventType } from '@/components/Event-card';
-import { usePosts } from '@/hooks/queries/usePosts';
+import { usePosts, useToggleLike } from '@/hooks/queries/usePosts';
 import { Post as PostType } from '@/services/postService';
 import { showToast } from '@/utils/toast';
 import * as Clipboard from 'expo-clipboard';
@@ -15,8 +15,6 @@ type TabType = 'All' | 'Posts' | 'Events';
 
 export default function SavedScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('All');
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [refreshing, setRefreshing] = useState(false);
   const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
   const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set());
 
@@ -62,6 +60,7 @@ export default function SavedScreen() {
       replySetting: 'Anyone',
       likes: 33300,
       replies: 3800,
+      shares: 1200,
       createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
       updatedAt: new Date().toISOString(),
     },
@@ -77,6 +76,7 @@ export default function SavedScreen() {
       replySetting: 'Anyone',
       likes: 33300,
       replies: 3800,
+      shares: 950,
       createdAt: new Date(Date.now() - 60000).toISOString(), // 1 minute ago
       updatedAt: new Date().toISOString(),
     },
@@ -92,13 +92,20 @@ export default function SavedScreen() {
       replySetting: 'Anyone',
       likes: 23500,
       replies: 3500,
+      shares: 800,
       createdAt: new Date(Date.now() - 1740000).toISOString(), // 29 minutes ago
       updatedAt: new Date().toISOString(),
     },
   ];
 
   // Fetch posts - in a real app, you'd filter for saved posts
-  const { data, isLoading, error, refetch } = usePosts({
+  const { 
+    data, 
+    isLoading, 
+    error, 
+    refetch,
+    isRefetching 
+  } = usePosts({
     page: 1,
     limit: 20,
   });
@@ -108,25 +115,21 @@ export default function SavedScreen() {
   const savedPostsData = mockSavedPosts;
 
   const handleRefresh = async () => {
-    setRefreshing(true);
     try {
       await refetch();
     } catch (error) {
       showToast.error('Failed to refresh');
-    } finally {
-      setRefreshing(false);
     }
   };
 
+  // Like/unlike mutation
+  const toggleLikeMutation = useToggleLike();
+
   const toggleLike = (postId: string) => {
-    setLikedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(postId)) {
-        newSet.delete(postId);
-      } else {
-        newSet.add(postId);
-      }
-      return newSet;
+    toggleLikeMutation.mutate(postId, {
+      onError: (error: any) => {
+        showToast.error(error.message || 'Failed to update like');
+      },
     });
   };
 
@@ -278,7 +281,7 @@ export default function SavedScreen() {
           contentContainerStyle={styles.scrollContent}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
+              refreshing={isRefetching}
               onRefresh={handleRefresh}
               tintColor="#AF7DFF"
             />
@@ -299,7 +302,7 @@ export default function SavedScreen() {
                 <Post
                   key={post.id}
                   post={post}
-                  isLiked={likedPosts.has(post.id)}
+                  isLiked={post.isLiked || false}
                   onLike={toggleLike}
                   onComment={handleComment}
                   onShare={handleShare}

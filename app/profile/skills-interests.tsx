@@ -2,142 +2,30 @@ import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useUser, useUpdatePersonalInfo } from '@/hooks/queries/useAuth';
 import { showToast } from '@/utils/toast';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
-
-type SkillItem = {
-  id: string;
-  name: string;
-};
-
-type SkillCategory = {
-  id: string;
-  name: string;
-  items: SkillItem[];
-};
-
-// Copied from `app/auth/personal-info.tsx` to keep the same items list.
-const skillCategories: SkillCategory[] = [
-  {
-    id: 'popular',
-    name: 'Popular Interests',
-    items: [
-      { id: 'social-networking', name: '🤝 Social Networking' },
-      { id: 'community', name: '👥 Community' },
-      { id: 'self-improvement', name: '📘 Self-Improvement' },
-    ],
-  },
-  {
-    id: 'creativity',
-    name: 'Creativity',
-    items: [
-      { id: 'design', name: '🎨 Design' },
-      { id: 'photography', name: '📸 Photography' },
-      { id: 'dancing', name: '💃 Dancing' },
-      { id: 'videography', name: '📹 Videography' },
-      { id: 'craft', name: '🧵 Craft' },
-      { id: 'writing', name: '✍️ Writing' },
-      { id: 'singing', name: '🎶 Singing' },
-    ],
-  },
-  {
-    id: 'sports',
-    name: 'Sports',
-    items: [
-      { id: 'cricket', name: '🏏 Cricket' },
-      { id: 'football', name: '⚽ Football' },
-      { id: 'kabaddi', name: '🤼 Kabaddi' },
-      { id: 'volleyball', name: '🏐 Volleyball' },
-      { id: 'wrestling', name: '🤼‍♂️ Wrestling' },
-      { id: 'chess', name: '♟️ Chess' },
-      { id: 'athletics', name: '🏃‍♀️ Athletics' },
-      { id: 'basketball', name: '🏀 Basketball' },
-      { id: 'table-tennis', name: '🏓 Table Tennis' },
-      { id: 'shooting', name: '🔫 Shooting' },
-      { id: 'archery', name: '🏹 Archery' },
-      { id: 'cycling', name: '🚴 Cycling' },
-    ],
-  },
-  {
-    id: 'career',
-    name: 'Career & Business',
-    items: [
-      { id: 'govt-jobs', name: '👔 Government Jobs' },
-      { id: 'private-jobs', name: '💼 Private Jobs' },
-      { id: 'freelancing', name: '👩🏻‍💻 Freelancing' },
-      { id: 'teaching', name: '👩‍🏫 Teaching' },
-      { id: 'healthcare', name: '🏥 Healthcare' },
-      { id: 'it/software', name: '💻 IT / Software' },
-      { id: 'engineering', name: '👷‍♂️ Engineering' },
-      { id: 'marketing-sales', name: '📢 Marketing & Sales' },
-      { id: 'banking-finance', name: '🏦 Banking & Finance' },
-      { id: 'agriculture', name: '🌾 Agriculture Sector' },
-      { id: 'law/legal-services', name: '⚖️ Law / Legal Services' },
-      { id: 'design/art', name: '🎨 Design / Art' },
-      { id: 'food-business', name: '🍽️ Food Business' },
-      { id: 'e-commerce', name: '🛒 E-commerce' },
-      { id: 'transportation', name: '🚕 Transportation' },
-      { id: 'logistics', name: '📦 Logistics' },
-    ],
-  },
-  {
-    id: 'community-env',
-    name: 'Community & Environment',
-    items: [
-      { id: 'volunteering', name: '🫱🏻‍🫲🏽 Volunteering' },
-      { id: 'youth-empowerment', name: '✊🏾 Youth Empowerment' },
-      { id: 'women-rights', name: '🚺 Women’s Rights' },
-      { id: 'education-access', name: '📚 Education Access' },
-      { id: 'disaster-relief', name: '🆘 Disaster Relief' },
-      { id: 'support-for-seniors', name: '👴🏻 Support for Seniors' },
-      { id: 'farming', name: '🌾 Farming' },
-      { id: 'waste-management', name: '♻️ Waste Management' },
-      { id: 'tree-plantation', name: '🌱 Tree Plantation' },
-      { id: 'clean-energy', name: '🔋 Clean Energy' },
-      { id: 'animal-welfare', name: '🐾 Animal Welfare' },
-      { id: 'sustainable-projects', name: '◾ Sustainability Projects' },
-      { id: 'water-conservation', name: '🚰 Water Conservation' },
-      { id: 'roommates', name: '👨🏽‍🤝‍👨🏼 Roommates' },
-    ],
-  },
-  {
-    id: 'health',
-    name: 'Health & Wellbeing',
-    items: [
-      { id: 'mental-health-awareness', name: '🧠 Mental Health Awareness' },
-      { id: 'meditation', name: '☯ Meditation' },
-      { id: 'yoga', name: '🧘 Yoga' },
-      { id: 'nutrition', name: '🍎 Nutrition' },
-      { id: 'fitness', name: '🏋 Fitness/Gym' },
-      { id: 'healthy-eating', name: '🥗 Healthy Eating' },
-      { id: 'digital-detox', name: '📵 Digital Detox' },
-      { id: 'disability-support', name: '🧑‍🦽 Disability Support' },
-    ],
-  },
-  {
-    id: 'identity',
-    name: 'Identity & Language',
-    items: [
-      { id: 'student', name: '👨‍🎓 Student' },
-      { id: 'farmer', name: '👨‍🌾 Farmer' },
-      { id: 'professional', name: '👩🏻‍💼 Professional' },
-      { id: 'entrepreneur', name: '💼 Entrepreneur' },
-      { id: 'artist/creator', name: '👨‍🎨 Artist/Creator' },
-      { id: 'homemaker', name: '👷‍♂️ Homemaker' },
-      { id: 'community-worker', name: '🧑‍💼 Community Worker' },
-      { id: 'volunteer', name: '🫱🏻‍🫲🏽 Volunteer' },
-      { id: 'activist', name: '✊ Activist' },
-      { id: 'english', name: '𝗘𝗡 English' },
-    ],
-  },
-];
+import { skillCategories, defaultExpandedCategories, type SkillCategory } from '@/constants/skills';
 
 export default function SkillsInterestsScreen() {
-  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set(['community', 'craft']));
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(['popular', 'creativity'])
+  const user = useUser();
+  const updatePersonalInfo = useUpdatePersonalInfo();
+
+  // Initialize selected skills from user data
+  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(
+    () => new Set(user?.skills || [])
   );
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    () => new Set(defaultExpandedCategories)
+  );
+
+  // Update selected skills when user data changes
+  useEffect(() => {
+    if (user?.skills) {
+      setSelectedSkills(new Set(user.skills));
+    }
+  }, [user?.skills]);
 
   const selectedCount = useMemo(() => selectedSkills.size, [selectedSkills]);
 
@@ -160,9 +48,18 @@ export default function SkillsInterestsScreen() {
   };
 
   const handleSave = async () => {
-    // TODO: Connect to backend/user profile update when endpoint is ready.
-    showToast.success('Skills & interests updated');
-    router.back();
+    try {
+      const skillsArray = Array.from(selectedSkills);
+      
+      await updatePersonalInfo.mutateAsync({
+        skills: skillsArray,
+      });
+
+      showToast.success('Skills & interests updated');
+      router.back();
+    } catch (error: any) {
+      showToast.error(error.message || 'Failed to update skills & interests');
+    }
   };
 
   return (
@@ -230,12 +127,17 @@ export default function SkillsInterestsScreen() {
         {/* Save */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.saveButton, selectedCount === 0 && styles.saveButtonDisabled]}
+            style={[
+              styles.saveButton,
+              (selectedCount === 0 || updatePersonalInfo.isPending) && styles.saveButtonDisabled
+            ]}
             onPress={handleSave}
             activeOpacity={0.85}
-            disabled={selectedCount === 0}
+            disabled={selectedCount === 0 || updatePersonalInfo.isPending}
           >
-            <Text style={styles.saveText}>Save</Text>
+            <Text style={styles.saveText}>
+              {updatePersonalInfo.isPending ? 'Saving...' : 'Save'}
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

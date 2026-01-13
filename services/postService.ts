@@ -23,6 +23,8 @@ export interface Post {
   pollEndDate?: string;
   likes: number;
   replies: number;
+  shares: number;
+  isLiked?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -82,6 +84,25 @@ export const listPosts = async (params?: ListPostsParams): Promise<ListPostsResp
     return response.data;
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch posts';
+    throw new Error(errorMessage);
+  }
+};
+
+// Toggle like API call
+export interface ToggleLikeResponse {
+  message: string;
+  likes: number;
+  isLiked: boolean;
+}
+
+export const toggleLike = async (postId: string): Promise<ToggleLikeResponse> => {
+  try {
+    const response = await api.post<ToggleLikeResponse>(
+      API_ROUTES.POSTS.LIKE(postId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to toggle like';
     throw new Error(errorMessage);
   }
 };
