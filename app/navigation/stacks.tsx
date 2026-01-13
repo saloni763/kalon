@@ -112,7 +112,7 @@ export function RootStack() {
           }} 
         />
         <Stack.Screen 
-          name="search" 
+          name="search/search" 
           options={{ 
             headerShown: false,
           }} 

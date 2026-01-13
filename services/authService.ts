@@ -67,7 +67,7 @@ export interface AuthResponse {
 }
 
 export interface UpdatePersonalInfoData {
-  email: string;
+  email?: string;
   fullName?: string;
   mobileNumber?: string;
   countryCode?: string;
@@ -104,6 +104,30 @@ export const login = async (data: LoginData): Promise<AuthResponse> => {
     return response.data;
   } catch (error: any) {
     throw new Error(error.message || 'Failed to login');
+  }
+};
+
+// Get current user profile API call
+export const getCurrentUser = async (): Promise<AuthResponse> => {
+  try {
+    const response = await api.get<AuthResponse>(
+      API_ROUTES.AUTH.GET_CURRENT_USER
+    );
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to get user profile');
+  }
+};
+
+// Get user profile by ID API call
+export const getUserById = async (userId: string): Promise<AuthResponse> => {
+  try {
+    const response = await api.get<AuthResponse>(
+      API_ROUTES.AUTH.GET_USER_BY_ID(userId)
+    );
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to get user profile');
   }
 };
 

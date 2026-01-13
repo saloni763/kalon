@@ -135,14 +135,21 @@ export default function Post({
   const [localPollVotes, setLocalPollVotes] = useState<number[]>((post as any).pollVotes || []);
   
   // Local counts that update immediately for better UX
-  const [likeCount, setLikeCount] = useState(post.likes);
-  const [commentCount, setCommentCount] = useState(post.replies);
-  const [shareCount, setShareCount] = useState(post.likes); // Using likes as share count for now
+  const [likeCount, setLikeCount] = useState(post.likes || 0);
+  const [commentCount, setCommentCount] = useState(post.replies || 0);
+  const [shareCount, setShareCount] = useState(post.shares || 0);
 
   // Sync like state with prop changes
   useEffect(() => {
     setLocalIsLiked(isLiked);
   }, [isLiked]);
+
+  // Sync counts when post data changes (e.g., after refetch)
+  useEffect(() => {
+    setLikeCount(post.likes || 0);
+    setCommentCount(post.replies || 0);
+    setShareCount(post.shares || 0);
+  }, [post.likes, post.replies, post.shares]);
   
   const hashtags = extractHashtags(post.content);
   const contentWithoutHashtags = post.content.replace(/#[\w]+/g, '').trim();
