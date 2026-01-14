@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import BackArrowIcon from '@/components/BackArrowIcon';
-import { useVerifyOTP, useForgotPassword } from '@/hooks/queries/useAuth';
+import { useVerifyOTP, useForgotPassword, useRequestOTP } from '@/hooks/queries/useAuth';
 import { showToast } from '@/utils/toast';
 
 const { width, height } = Dimensions.get('window');
@@ -16,10 +16,6 @@ export default function OTPVerificationScreen() {
   const [canResend, setCanResend] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const inputRefs = useRef<(TextInput | null)[]>([]);
-  
-  // TanStack Query mutations
-  const verifyOTPMutation = useVerifyOTP();
-  const resendOTPMutation = useForgotPassword();
   
   // Get all params - for signup flow, we need to pass all signup data through
   const params = useLocalSearchParams<{ 
@@ -34,6 +30,40 @@ export default function OTPVerificationScreen() {
   const displayEmail = params.email || 'your email';
   const isSignupFlow = params.flow === 'signup';
   const isPasswordResetFlow = params.flow === 'password-reset';
+
+  // TanStack Query mutations
+  const verifyOTPMutation = useVerifyOTP();
+  const forgotPasswordMutation = useForgotPassword();
+  const requestOTPMutation = useRequestOTP();
+  
+  // Track if initial OTP has been requested to prevent duplicate calls
+  const hasRequestedInitialOTP = useRef(false);
+
+  // Request OTP automatically on mount for signup flow
+  useEffect(() => {
+    // Only request OTP once when component mounts and conditions are met
+    if (isSignupFlow && params.email && !hasRequestedInitialOTP.current) {
+      hasRequestedInitialOTP.current = true;
+      
+      requestOTPMutation.mutate(
+        {
+          emailOrPhone: params.email,
+          purpose: 'email-verification',
+        },
+        {
+          onSuccess: () => {
+            console.log('OTP requested successfully for signup');
+          },
+          onError: (error: any) => {
+            console.error('Failed to request OTP:', error);
+            showToast.error(error.message || 'Failed to request OTP. Please try again.');
+            // Reset flag on error so user can retry
+            hasRequestedInitialOTP.current = false;
+          },
+        }
+      );
+    }
+  }, [isSignupFlow, params.email, requestOTPMutation]);
 
   useEffect(() => {
     if (timeLeft > 0) {
@@ -70,12 +100,38 @@ export default function OTPVerificationScreen() {
   };
 
   const handleResend = () => {
-    if (canResend && params.email) {
-      setTimeLeft(60);
-      setCanResend(false);
-      setOtp(['', '', '', '']);
-      
-      resendOTPMutation.mutate(
+    if (!canResend || !params.email) return;
+    
+    // Prevent resend if a mutation is already in progress
+    if (requestOTPMutation.isPending || forgotPasswordMutation.isPending) {
+      return;
+    }
+
+    setTimeLeft(60);
+    setCanResend(false);
+    setOtp(['', '', '', '']);
+    
+    // Use the correct endpoint based on the flow
+    if (isSignupFlow) {
+      requestOTPMutation.mutate(
+        {
+          emailOrPhone: params.email,
+          purpose: 'email-verification',
+        },
+        {
+          onSuccess: () => {
+            showToast.success('A new OTP code has been sent to your email/phone.');
+          },
+          onError: (error: any) => {
+            showToast.error(error.message || 'Failed to resend OTP. Please try again.');
+            // Reset timer if resend fails
+            setCanResend(true);
+          },
+        }
+      );
+    } else {
+      // Use forgotPassword for password reset flow
+      forgotPasswordMutation.mutate(
         { emailOrPhone: params.email },
         {
           onSuccess: () => {
@@ -92,6 +148,11 @@ export default function OTPVerificationScreen() {
   };
 
   const handleVerify = () => {
+    // Prevent duplicate submissions
+    if (verifyOTPMutation.isPending) {
+      return;
+    }
+
     const otpCode = otp.join('');
     
     // Validate OTP is complete (4 digits)
@@ -120,18 +181,18 @@ export default function OTPVerificationScreen() {
       },
       {
         onSuccess: () => {
-      if (isSignupFlow) {
-        // Navigate to personal info page with all signup data
-        router.push({
-          pathname: '/auth/personal-info',
-          params: {
-            name: params.name || '',
-            email: params.email || '',
-            mobileNumber: params.mobileNumber || '',
-            password: params.password || '',
-            countryCode: params.countryCode || '',
-          }
-        });
+          if (isSignupFlow) {
+            // Navigate to personal info page with all signup data
+            router.push({
+              pathname: '/auth/personal-info',
+              params: {
+                name: params.name || '',
+                email: params.email || '',
+                mobileNumber: params.mobileNumber || '',
+                password: params.password || '',
+                countryCode: params.countryCode || '',
+              }
+            });
           } else if (isPasswordResetFlow) {
             // Navigate to create new password for forgot password flow
             router.push({
@@ -141,7 +202,7 @@ export default function OTPVerificationScreen() {
                 otp: otpCode,
               }
             });
-      } else {
+          } else {
             // Default flow - navigate to create new password
             router.push({
               pathname: '/auth/create-new-password',
@@ -150,16 +211,16 @@ export default function OTPVerificationScreen() {
                 otp: otpCode,
               }
             });
-      }
+          }
         },
         onError: (error: any) => {
-      // Handle verification error
+          // Handle verification error
           showToast.error(
-        error.message || 'Invalid OTP code. Please try again.',
+            error.message || 'Invalid OTP code. Please try again.',
             'Verification Failed'
-      );
+          );
         },
-    }
+      }
     );
   };
 
@@ -187,7 +248,11 @@ export default function OTPVerificationScreen() {
         <Text style={styles.instructionText}>
           {isSignupFlow ? (
             <>
-              We've sent a 4-digit OTP to your <Text style={styles.emailText}>{displayEmail}</Text>. Please enter the code below to verify your email.
+              {requestOTPMutation.isPending ? (
+                <>Sending OTP to <Text style={styles.emailText}>{displayEmail}</Text>...</>
+              ) : (
+                <>We've sent a 4-digit OTP to your <Text style={styles.emailText}>{displayEmail}</Text>. Please enter the code below to verify your email.</>
+              )}
             </>
           ) : (
             <>
@@ -246,8 +311,16 @@ export default function OTPVerificationScreen() {
         <View style={styles.resendContainer}>
           <Text style={styles.resendQuestion}>Didn't receive email?</Text>
           {canResend ? (
-            <TouchableOpacity onPress={handleResend}>
-              <Text style={styles.resendLink}>Resend code</Text>
+            <TouchableOpacity 
+              onPress={handleResend}
+              disabled={requestOTPMutation.isPending || forgotPasswordMutation.isPending}
+              activeOpacity={0.7}
+            >
+              {requestOTPMutation.isPending || forgotPasswordMutation.isPending ? (
+                <ActivityIndicator size="small" color="#AF7DFF" />
+              ) : (
+                <Text style={styles.resendLink}>Resend code</Text>
+              )}
             </TouchableOpacity>
           ) : (
             <Text style={styles.resendTimer}>

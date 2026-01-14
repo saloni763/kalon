@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 declare const __DEV__: boolean;
 
 // These constants are only used in development mode
-const PHYSICAL_DEVICE_IP = '192.168.1.4';
+const PHYSICAL_DEVICE_IP = '192.168.1.2';
 const USE_PHYSICAL_DEVICE = true;
 
 const getApiBaseUrl = (): string => {
@@ -34,8 +34,13 @@ export const API_ROUTES = {
     GET_USER_BY_ID: (userId: string) => `/api/auth/user/${userId}`,
     UPDATE_PERSONAL_INFO: '/api/auth/update-personal-info',
     FORGOT_PASSWORD: '/api/auth/forgot-password',
+    REQUEST_OTP: '/api/auth/request-otp',
     VERIFY_OTP: '/api/auth/verify-otp',
     RESET_PASSWORD: '/api/auth/reset-password',
+    FOLLOW_USER: (userId: string) => `/api/auth/user/${userId}/follow`,
+    UNFOLLOW_USER: (userId: string) => `/api/auth/user/${userId}/unfollow`,
+    GET_FOLLOWERS: (userId: string) => `/api/auth/user/${userId}/followers`,
+    GET_FOLLOWING: (userId: string) => `/api/auth/user/${userId}/following`,
   },
   POSTS: {
     CREATE: '/api/posts/create',

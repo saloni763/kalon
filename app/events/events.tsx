@@ -1,9 +1,15 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import SearchIcon from '@/components/ui/SearchIcon';
+import BackArrowIcon from '@/components/BackArrowIcon';
 import Event, { EventType } from '@/components/Event-card';
+import { EventFilters } from './filter';
+
+const FILTERS_STORAGE_KEY = '@kalon_event_filters';
 
 const categories = ['All Events', 'Music', 'Sports', 'Community'];
 
@@ -11,7 +17,7 @@ const sampleEvents: EventType[] = [
   {
     id: '1',
     title: 'AI & Future Tech Summit 2025',
-    host: 'TechNext Community',
+    host: 'TechWest Community',
     date: 'July 15, 2025',
     time: '10:00 AM – 4:00 PM',
     location: 'TechSphere Convention Hall, New York, NY',
@@ -60,8 +66,65 @@ const sampleEvents: EventType[] = [
   },
 ];
 
+const DEFAULT_FILTERS: EventFilters = {
+  date: 'starting-soon',
+  eventType: {
+    private: true,
+    public: true,
+  },
+  eventMode: 'all',
+};
+
 export default function EventsScreen() {
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState('All Events');
+  const [isExploreAllMode, setIsExploreAllMode] = useState(false);
+  const [filters, setFilters] = useState<EventFilters>(DEFAULT_FILTERS);
+
+  // Load filters from AsyncStorage when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      const loadFilters = async () => {
+        try {
+          const storedFilters = await AsyncStorage.getItem(FILTERS_STORAGE_KEY);
+          if (storedFilters) {
+            const parsedFilters = JSON.parse(storedFilters);
+            setFilters({ ...DEFAULT_FILTERS, ...parsedFilters });
+          }
+        } catch (error) {
+          console.error('Error loading filters:', error);
+        }
+      };
+      loadFilters();
+    }, [])
+  );
+
+  // Check if any filters are active (different from default)
+  const hasActiveFilters = () => {
+    return (
+      filters.date !== DEFAULT_FILTERS.date ||
+      filters.eventType.private !== DEFAULT_FILTERS.eventType.private ||
+      filters.eventType.public !== DEFAULT_FILTERS.eventType.public ||
+      filters.eventMode !== DEFAULT_FILTERS.eventMode
+    );
+  };
+
+  // Filter events based on current filters
+  const getFilteredEvents = () => {
+    return sampleEvents.filter((event) => {
+      // Filter by event type
+      if (!filters.eventType.private && !event.isPublic) return false;
+      if (!filters.eventType.public && event.isPublic) return false;
+
+      // Filter by event mode
+      if (filters.eventMode === 'onsite' && event.isOnline) return false;
+      if (filters.eventMode === 'online' && !event.isOnline) return false;
+
+      // Date filtering would require actual date comparison
+      // For now, we'll just return true for all date filters
+      return true;
+    });
+  };
 
   const handleJoin = (eventId: string) => {
     console.log('Join event:', eventId);
@@ -75,6 +138,114 @@ export default function EventsScreen() {
     console.log('Save event:', eventId);
   };
 
+  const handleExploreAll = () => {
+    setIsExploreAllMode(true);
+  };
+
+  const handleBack = () => {
+    setIsExploreAllMode(false);
+  };
+
+  const handleSearch = () => {
+    // TODO: Implement search functionality
+    console.log('Search events');
+  };
+
+  const handleFilter = () => {
+    // Navigate to filter screen with current filters
+    const filtersParam = encodeURIComponent(JSON.stringify(filters));
+    router.push(`/events/filter?filters=${filtersParam}` as any);
+  };
+
+  const filteredEvents = getFilteredEvents();
+
+  // If in explore all mode, show the full events list
+  if (isExploreAllMode) {
+    return (
+      <View style={styles.container}>
+        <SafeAreaView style={styles.content} edges={['top']}>
+          {/* Explore Events Header */}
+          <View style={styles.exploreHeader}>
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={handleBack}
+              activeOpacity={0.7}
+            >
+              <BackArrowIcon width={24} height={24} color="#0D0A1B" />
+            </TouchableOpacity>
+            <Text style={styles.exploreTitle}>Explore Events</Text>
+            <View style={styles.headerRightIcons}>
+              <TouchableOpacity 
+                style={styles.headerIconButton} 
+                onPress={handleSearch}
+                activeOpacity={0.7}
+              >
+                <SearchIcon width={20} height={20} color="#AF7DFF" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.headerIconButton} 
+                onPress={handleFilter}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="options-outline" size={20} color="#AF7DFF" />
+                {hasActiveFilters() && (
+                  <View style={styles.filterIndicator} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <ScrollView 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Category Filters */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryContainer}
+            >
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category}
+                  style={[
+                    styles.categoryButton,
+                    selectedCategory === category && styles.categoryButtonActive,
+                  ]}
+                  onPress={() => setSelectedCategory(category)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.categoryButtonText,
+                      selectedCategory === category && styles.categoryButtonTextActive,
+                    ]}
+                  >
+                    {category}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Event Cards */}
+            <View style={styles.eventsList}>
+              {filteredEvents.map((event) => (
+                <Event
+                  key={event.id}
+                  event={event}
+                  onJoin={handleJoin}
+                  onShare={handleShare}
+                  onSave={handleSave}
+                />
+              ))}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // Default view with empty state and discover section
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.content} edges={['top']}>
@@ -98,7 +269,11 @@ export default function EventsScreen() {
             <Text style={styles.emptyStateDescription}>
               Create your own event and invite your friends or the community.
             </Text>
-            <TouchableOpacity style={styles.createEventButton} activeOpacity={0.8}>
+            <TouchableOpacity 
+              style={styles.createEventButton} 
+              activeOpacity={0.8}
+              onPress={() => router.push('/events/create' as any)}
+            >
               <Text style={styles.createEventButtonText}>Create Event</Text>
             </TouchableOpacity>
           </View>
@@ -107,7 +282,10 @@ export default function EventsScreen() {
           <View style={styles.discoverSection}>
             <View style={styles.discoverHeader}>
               <Text style={styles.discoverTitle}>Discover Events</Text>
-              <TouchableOpacity activeOpacity={0.7}>
+              <TouchableOpacity 
+                onPress={handleExploreAll}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.exploreAllText}>Explore All</Text>
               </TouchableOpacity>
             </View>
@@ -142,7 +320,7 @@ export default function EventsScreen() {
 
             {/* Event Cards */}
             <View style={styles.eventsList}>
-              {sampleEvents.map((event) => (
+              {filteredEvents.map((event) => (
                 <Event
                   key={event.id}
                   event={event}
@@ -282,5 +460,50 @@ const styles = StyleSheet.create({
   },
   eventsList: {
     paddingTop: 8,
+  },
+  exploreHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exploreTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0D0A1B',
+    fontFamily: 'Montserrat_700Bold',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerRightIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5EEFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  filterIndicator: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: 10,
+    height: 10,
+    borderRadius: 8,
+    backgroundColor: 'red',
   },
 });

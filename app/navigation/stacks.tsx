@@ -99,6 +99,34 @@ export function RootStack() {
           }} 
         />
         <Stack.Screen 
+          name="events/[eventId]" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
+          }} 
+        />
+        <Stack.Screen 
+          name="events/filter" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
+          }} 
+        />
+        <Stack.Screen 
+          name="events/create" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
+          }} 
+        />
+        <Stack.Screen 
+          name="events/invite-friends" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
+          }} 
+        />
+        <Stack.Screen 
           name="chats/chats" 
           options={{ 
             headerShown: false,
@@ -115,6 +143,13 @@ export function RootStack() {
           name="search/search" 
           options={{ 
             headerShown: false,
+          }} 
+        />
+        <Stack.Screen 
+          name="search/filter" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
           }} 
         />
         <Stack.Screen 
