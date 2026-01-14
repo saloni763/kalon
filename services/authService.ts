@@ -47,6 +47,7 @@ export interface User {
   name: string;
   mobileNumber: string;
   email: string;
+  picture?: string;
   gender?: 'Male' | 'Female' | 'Other';
   dateOfBirth?: string;
   aboutMe?: string;
@@ -56,6 +57,9 @@ export interface User {
   skills?: string[];
   goals?: string[];
   networkVisibility?: 'public' | 'friends';
+  followersCount?: number;
+  followingCount?: number;
+  isFollowing?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -154,6 +158,16 @@ export interface ForgotPasswordResponse {
   otp?: string; // Only in development mode
 }
 
+export interface RequestOTPData {
+  emailOrPhone: string;
+  purpose?: 'password-reset' | 'email-verification';
+}
+
+export interface RequestOTPResponse {
+  message: string;
+  otp?: string; // Only in development mode
+}
+
 export interface VerifyOTPData {
   emailOrPhone: string;
   otp: string;
@@ -184,6 +198,20 @@ export const forgotPassword = async (data: ForgotPasswordData): Promise<ForgotPa
     return response.data;
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message || 'Failed to send OTP';
+    throw new Error(errorMessage);
+  }
+};
+
+// Request OTP API call (for email verification during signup)
+export const requestOTP = async (data: RequestOTPData): Promise<RequestOTPResponse> => {
+  try {
+    const response = await api.post<RequestOTPResponse>(
+      API_ROUTES.AUTH.REQUEST_OTP,
+      data
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to request OTP';
     throw new Error(errorMessage);
   }
 };
@@ -253,6 +281,81 @@ export const logout = async (): Promise<LogoutResponse> => {
     return response.data;
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message || 'Failed to logout';
+    throw new Error(errorMessage);
+  }
+};
+
+// Follow/Unfollow interfaces
+export interface FollowUserResponse {
+  message: string;
+  following: boolean;
+}
+
+export interface UnfollowUserResponse {
+  message: string;
+  following: boolean;
+}
+
+// Follow user API call
+export const followUser = async (userId: string): Promise<FollowUserResponse> => {
+  try {
+    const response = await api.post<FollowUserResponse>(
+      API_ROUTES.AUTH.FOLLOW_USER(userId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to follow user';
+    throw new Error(errorMessage);
+  }
+};
+
+// Unfollow user API call
+export const unfollowUser = async (userId: string): Promise<UnfollowUserResponse> => {
+  try {
+    const response = await api.post<UnfollowUserResponse>(
+      API_ROUTES.AUTH.UNFOLLOW_USER(userId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to unfollow user';
+    throw new Error(errorMessage);
+  }
+};
+
+// Get followers list
+export interface GetFollowersResponse {
+  message: string;
+  followers: User[];
+}
+
+// Get following list
+export interface GetFollowingResponse {
+  message: string;
+  following: User[];
+}
+
+// Get followers API call
+export const getFollowers = async (userId: string): Promise<GetFollowersResponse> => {
+  try {
+    const response = await api.get<GetFollowersResponse>(
+      API_ROUTES.AUTH.GET_FOLLOWERS(userId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to get followers';
+    throw new Error(errorMessage);
+  }
+};
+
+// Get following API call
+export const getFollowing = async (userId: string): Promise<GetFollowingResponse> => {
+  try {
+    const response = await api.get<GetFollowingResponse>(
+      API_ROUTES.AUTH.GET_FOLLOWING(userId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to get following';
     throw new Error(errorMessage);
   }
 };

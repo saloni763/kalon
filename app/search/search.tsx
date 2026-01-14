@@ -1,13 +1,14 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect } from 'react';
-import { router } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import SearchIcon from '@/components/ui/SearchIcon';
 import VerifiedBadge from '@/components/ui/VerifiedBadge';
 import { SearchUser, SearchPost } from '@/services/searchService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSearchUsers, useSearchPosts } from '@/hooks/queries/useSearch';
+import { FilterState } from '@/components/FilterModal';
 
 type TabType = 'recent' | 'people' | 'post' | 'events';
 
@@ -33,11 +34,32 @@ const getInitials = (name: string): string => {
     .slice(0, 2);
 };
 
+const FILTERS_STORAGE_KEY = '@kalon_search_filters';
+
 export default function SearchScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('recent');
   const [searchQuery, setSearchQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>([]);
   const [suggestedPeople, setSuggestedPeople] = useState<SearchUser[]>([]);
+  const [appliedFilters, setAppliedFilters] = useState<FilterState | null>(null);
+
+  // Load filters when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadFilters();
+    }, [])
+  );
+
+  const loadFilters = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(FILTERS_STORAGE_KEY);
+      if (stored) {
+        setAppliedFilters(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading filters:', error);
+    }
+  };
 
   // React Query hooks for search
   const hasSearchQuery = searchQuery.trim().length > 0;
@@ -486,7 +508,11 @@ export default function SearchScreen() {
               </TouchableOpacity>
             )}
           </View>
-          <TouchableOpacity style={styles.filterButton} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.filterButton}
+            activeOpacity={0.7}
+            onPress={() => router.push('/search/filter' as any)}
+          >
             <Ionicons name="options-outline" size={24} color="#7436D7" />
           </TouchableOpacity>
         </View>

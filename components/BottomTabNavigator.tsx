@@ -21,7 +21,7 @@ const tabs: TabItem[] = [
   { name: 'search', route: '/search/search', icon: 'search', label: 'Search' },
   { name: 'create', route: '/create', icon: 'add', label: '' }, // Special button, no label
   { name: 'chats', route: '/chats/chats', icon: 'chatbubble-outline', label: 'Chats' },
-  { name: 'events', route: '/events', icon: 'calendar-outline', label: 'Events' },
+  { name: 'events', route: '/events/events', icon: 'calendar-outline', label: 'Events' },
 ];
 
 export default function BottomTabNavigator() {
@@ -32,7 +32,7 @@ export default function BottomTabNavigator() {
   const allowedPaths = [
     '/homepage/home',
     '/search/search',
-    '/events',
+    '/events/events',
     '/chats/chats',
   ];
   

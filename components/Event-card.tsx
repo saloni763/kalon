@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import ShareIcon from '@/assets/icons/Share.svg';
 import CalendarIcon from '@/components/ui/CalendarIcon';
 
@@ -32,6 +33,7 @@ export default function Event({
   onShare,
   onSave,
 }: EventProps) {
+  const router = useRouter();
   const [isJoined, setIsJoined] = useState(event.isJoined || false);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -49,8 +51,16 @@ export default function Event({
     onShare?.(event.id);
   };
 
+  const handleCardPress = () => {
+    router.push(`/events/${event.id}` as any);
+  };
+
   return (
-    <View style={styles.eventCard}>
+    <TouchableOpacity
+      style={styles.eventCard}
+      onPress={handleCardPress}
+      activeOpacity={0.9}
+    >
       {/* Event Image */}
       <View style={styles.imageContainer}>
         {event.imageUri ? (
@@ -147,7 +157,7 @@ export default function Event({
           </View>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

@@ -6,18 +6,29 @@ import {
   getUserById,
   updatePersonalInfo, 
   forgotPassword,
+  requestOTP,
   verifyOTP,
   resetPassword,
+  followUser,
+  unfollowUser,
+  getFollowers,
+  getFollowing,
   SignupData, 
   LoginData, 
   UpdatePersonalInfoData, 
   AuthResponse,
   ForgotPasswordData,
   ForgotPasswordResponse,
+  RequestOTPData,
+  RequestOTPResponse,
   VerifyOTPData,
   VerifyOTPResponse,
   ResetPasswordData,
   ResetPasswordResponse,
+  FollowUserResponse,
+  UnfollowUserResponse,
+  GetFollowersResponse,
+  GetFollowingResponse,
   User
 } from '@/services/authService';
 import { saveToken, saveUser, removeToken } from '@/utils/tokenStorage';
@@ -30,6 +41,8 @@ export const authKeys = {
   user: () => [...authKeys.all, 'user'] as const,
   userById: (userId: string) => [...authKeys.all, 'user', userId] as const,
   sessions: () => [...authKeys.all, 'sessions'] as const,
+  followers: (userId: string) => [...authKeys.all, 'followers', userId] as const,
+  following: (userId: string) => [...authKeys.all, 'following', userId] as const,
 };
 
 // Signup mutation
@@ -277,6 +290,16 @@ export const useForgotPassword = () => {
   });
 };
 
+// Request OTP mutation (for email verification during signup)
+export const useRequestOTP = () => {
+  return useMutation({
+    mutationFn: (data: RequestOTPData) => requestOTP(data),
+    onError: (error) => {
+      console.error('Request OTP error:', error);
+    },
+  });
+};
+
 // Verify OTP mutation
 export const useVerifyOTP = () => {
   return useMutation({
@@ -298,6 +321,130 @@ export const useResetPassword = () => {
     onError: (error) => {
       console.error('Reset password error:', error);
     },
+  });
+};
+
+// Follow user mutation
+export const useFollowUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => followUser(userId),
+    onMutate: async (targetUserId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: authKeys.user() });
+      
+      // Snapshot the current user
+      const currentUser = queryClient.getQueryData<User>(authKeys.user());
+      
+      // Optimistically update current user's following count
+      if (currentUser) {
+        queryClient.setQueryData<User>(authKeys.user(), {
+          ...currentUser,
+          followingCount: (currentUser.followingCount || 0) + 1,
+        });
+      }
+      
+      return { currentUser };
+    },
+    onSuccess: (data, targetUserId, context) => {
+      // Invalidate all related queries to ensure consistency
+      queryClient.invalidateQueries({ queryKey: authKeys.userById(targetUserId) });
+      queryClient.invalidateQueries({ queryKey: authKeys.user() });
+      // Invalidate followers/following lists for both current user and target user
+      const currentUser = queryClient.getQueryData<User>(authKeys.user());
+      if (currentUser) {
+        queryClient.invalidateQueries({ queryKey: authKeys.following(currentUser.id) });
+      }
+      queryClient.invalidateQueries({ queryKey: authKeys.followers(targetUserId) });
+      queryClient.invalidateQueries({ queryKey: authKeys.following(targetUserId) });
+    },
+    onError: (error, targetUserId, context) => {
+      // Rollback optimistic update
+      if (context?.currentUser) {
+        queryClient.setQueryData<User>(authKeys.user(), context.currentUser);
+      }
+      console.error('Follow user error:', error);
+    },
+  });
+};
+
+// Unfollow user mutation
+export const useUnfollowUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => unfollowUser(userId),
+    onMutate: async (targetUserId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: authKeys.user() });
+      
+      // Snapshot the current user
+      const currentUser = queryClient.getQueryData<User>(authKeys.user());
+      
+      // Optimistically update current user's following count
+      if (currentUser) {
+        queryClient.setQueryData<User>(authKeys.user(), {
+          ...currentUser,
+          followingCount: Math.max((currentUser.followingCount || 0) - 1, 0),
+        });
+      }
+      
+      return { currentUser };
+    },
+    onSuccess: (data, targetUserId, context) => {
+      // Invalidate all related queries to ensure consistency
+      queryClient.invalidateQueries({ queryKey: authKeys.userById(targetUserId) });
+      queryClient.invalidateQueries({ queryKey: authKeys.user() });
+      // Invalidate followers/following lists for both current user and target user
+      const currentUser = queryClient.getQueryData<User>(authKeys.user());
+      if (currentUser) {
+        queryClient.invalidateQueries({ queryKey: authKeys.following(currentUser.id) });
+      }
+      queryClient.invalidateQueries({ queryKey: authKeys.followers(targetUserId) });
+      queryClient.invalidateQueries({ queryKey: authKeys.following(targetUserId) });
+    },
+    onError: (error, targetUserId, context) => {
+      // Rollback optimistic update
+      if (context?.currentUser) {
+        queryClient.setQueryData<User>(authKeys.user(), context.currentUser);
+      }
+      console.error('Unfollow user error:', error);
+    },
+  });
+};
+
+// Get followers query
+export const useFollowers = (userId: string | undefined) => {
+  return useQuery({
+    queryKey: userId ? authKeys.followers(userId) : ['auth', 'followers', 'null'],
+    queryFn: async () => {
+      if (!userId) return null;
+      const response = await getFollowers(userId);
+      return response.followers;
+    },
+    enabled: !!userId,
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+};
+
+// Get following query
+export const useFollowing = (userId: string | undefined) => {
+  return useQuery({
+    queryKey: userId ? authKeys.following(userId) : ['auth', 'following', 'null'],
+    queryFn: async () => {
+      if (!userId) return null;
+      const response = await getFollowing(userId);
+      return response.following;
+    },
+    enabled: !!userId,
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 };
 

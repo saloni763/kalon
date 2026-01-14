@@ -1,50 +1,15 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
 import VerifiedBadge from '@/components/ui/VerifiedBadge';
 import SearchIcon from '@/components/ui/SearchIcon';
+import { useFollowers, useFollowing, useFollowUser, useUnfollowUser, useUser } from '@/hooks/queries/useAuth';
+import { User as UserType } from '@/services/authService';
+import { showToast } from '@/utils/toast';
 
 type ListType = 'followers' | 'following';
-
-interface User {
-  id: string;
-  name: string;
-  username: string;
-  picture?: string;
-  isVerified: boolean;
-  isFollowing: boolean;
-}
-
-// Mock data for followers (people who follow you - most should show "Follow" button)
-const mockFollowers: User[] = [
-  { id: '1', name: 'Alex Morgan', username: '@alex-m', picture: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', isVerified: false, isFollowing: true },
-  { id: '2', name: 'Andrew Lee', username: '@lee_89', picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', isVerified: true, isFollowing: false },
-  { id: '3', name: 'Antonio Ruiz', username: '@antonio_r', picture: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', isVerified: false, isFollowing: true },
-  { id: '4', name: 'Amara Singh', username: '@amara_s', picture: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150', isVerified: false, isFollowing: true },
-  { id: '5', name: 'Aaron Kim', username: '@aaron_k', picture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150', isVerified: true, isFollowing: false },
-  { id: '6', name: 'Anika Patel', username: '@anika_p', picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', isVerified: false, isFollowing: true },
-  { id: '7', name: 'Adele Nguyen', username: '@adele_n', picture: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=150', isVerified: false, isFollowing: false },
-  { id: '8', name: 'Anastasia Georgiou', username: '@anastasia_g', picture: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=150', isVerified: false, isFollowing: true },
-  { id: '9', name: 'Ayaka Tanaka', username: '@ayaka_t', picture: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150', isVerified: false, isFollowing: true },
-  { id: '10', name: 'Ansel Müller', username: '@ansel_m', picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', isVerified: false, isFollowing: true },
-];
-
-// Mock data for following (people you follow - most should show "Following" button)
-const mockFollowing: User[] = [
-  { id: '1', name: 'Alex Morgan', username: '@alex-m', picture: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', isVerified: false, isFollowing: true },
-  { id: '2', name: 'Andrew Lee', username: '@lee_89', picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', isVerified: true, isFollowing: true },
-  { id: '3', name: 'Antonio Ruiz', username: '@antonio_r', picture: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', isVerified: false, isFollowing: true },
-  { id: '4', name: 'Amara Singh', username: '@amara_s', picture: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150', isVerified: false, isFollowing: true },
-  { id: '5', name: 'Aaron Kim', username: '@aaron_k', picture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150', isVerified: true, isFollowing: true },
-  { id: '6', name: 'Anika Patel', username: '@anika_p', picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', isVerified: false, isFollowing: true },
-  { id: '7', name: 'Adele Nguyen', username: '@adele_n', picture: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=150', isVerified: false, isFollowing: true },
-  { id: '8', name: 'Anastasia Georgiou', username: '@anastasia_g', picture: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=150', isVerified: false, isFollowing: true },
-  { id: '9', name: 'Ayaka Tanaka', username: '@ayaka_t', picture: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150', isVerified: false, isFollowing: true },
-  { id: '10', name: 'Ansel Müller', username: '@ansel_m', picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', isVerified: false, isFollowing: true },
-];
 
 const getInitials = (name: string): string => {
   return name
@@ -56,24 +21,66 @@ const getInitials = (name: string): string => {
 };
 
 export default function FollowersFollowingScreen() {
-  const { type } = useLocalSearchParams<{ type: ListType }>();
+  const { type, userId } = useLocalSearchParams<{ type: ListType; userId?: string }>();
   const listType = type || 'followers';
-  const [users, setUsers] = useState<User[]>(
-    listType === 'followers' ? mockFollowers : mockFollowing
-  );
+  const currentUser = useUser();
+  
+  // Use provided userId or current user's id
+  const targetUserId = userId || currentUser?.id;
+  
+  // Fetch followers or following based on list type
+  const followersQuery = useFollowers(listType === 'followers' ? targetUserId : undefined);
+  const followingQuery = useFollowing(listType === 'following' ? targetUserId : undefined);
+  
+  const followersMutation = useFollowUser();
+  const unfollowMutation = useUnfollowUser();
+  
+  // Get the active query based on list type
+  const activeQuery = listType === 'followers' ? followersQuery : followingQuery;
+  
+  const isLoading = activeQuery.isLoading;
+  const isError = activeQuery.isError;
+  const isRefetching = activeQuery.isRefetching;
+  const users = activeQuery.data || [];
+  const refetch = activeQuery.refetch;
 
   const handleFollowToggle = (userId: string) => {
-    setUsers(prevUsers =>
-      prevUsers.map(user =>
-        user.id === userId
-          ? { ...user, isFollowing: !user.isFollowing }
-          : user
-      )
-    );
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    
+    const currentlyFollowing = user.isFollowing || false;
+    
+    if (currentlyFollowing) {
+      // Unfollow
+      unfollowMutation.mutate(userId, {
+        onSuccess: () => {
+          showToast.success('Unfollowed');
+          // React Query will automatically refetch due to query invalidation
+        },
+        onError: (error: any) => {
+          showToast.error(error.message || 'Failed to unfollow user');
+        },
+      });
+    } else {
+      // Follow
+      followersMutation.mutate(userId, {
+        onSuccess: () => {
+          showToast.success('Following');
+          // React Query will automatically refetch due to query invalidation
+        },
+        onError: (error: any) => {
+          showToast.error(error.message || 'Failed to follow user');
+        },
+      });
+    }
   };
 
   const handleUserPress = (userId: string) => {
     router.push(`/profile/${userId}` as any);
+  };
+  
+  const handleRefresh = async () => {
+    await refetch();
   };
 
   return (
@@ -97,64 +104,106 @@ export default function FollowersFollowingScreen() {
         </View>
 
         {/* User List */}
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          {users.map((user) => (
-            <View key={user.id} style={styles.userItem}>
-              <TouchableOpacity
-                style={styles.userInfo}
-                onPress={() => handleUserPress(user.id)}
-                activeOpacity={0.7}
-              >
-                {/* Profile Picture */}
-                <View style={styles.profileImageContainer}>
-                  {user.picture ? (
-                    <Image
-                      source={{ uri: user.picture }}
-                      style={styles.profileImage}
-                    />
-                  ) : (
-                    <View style={styles.profileImagePlaceholder}>
-                      <Text style={styles.profileImageText}>
-                        {getInitials(user.name)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* User Details */}
-                <View style={styles.userDetails}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.userName}>{user.name}</Text>
-                    {user.isVerified && (
-                      <View style={styles.verifiedBadge}>
-                        <VerifiedBadge width={16} height={16} color="#7436D7" />
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.username}>{user.username}</Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Follow/Following Button */}
-              <TouchableOpacity
-                style={[
-                  styles.followButton,
-                  user.isFollowing && styles.followingButton,
-                ]}
-                onPress={() => handleFollowToggle(user.id)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.followButtonText,
-                    user.isFollowing && styles.followingButtonText,
-                  ]}
-                >
-                  {user.isFollowing ? 'Following' : 'Follow'}
-                </Text>
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl 
+              refreshing={isRefetching} 
+              onRefresh={handleRefresh}
+              tintColor="#AF7DFF"
+            />
+          }
+        >
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#AF7DFF" />
+            </View>
+          ) : isError ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>Failed to load {listType}</Text>
+              <TouchableOpacity onPress={() => refetch()} style={styles.retryButton}>
+                <Text style={styles.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
-          ))}
+          ) : users.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                {listType === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
+              </Text>
+            </View>
+          ) : (
+            users.map((user) => {
+              // Don't show follow button for current user
+              const isCurrentUser = user.id === currentUser?.id;
+              const isFollowing = user.isFollowing || false;
+              // Check if this specific user's mutation is pending
+              const isPending = 
+                (followersMutation.isPending && followersMutation.variables === user.id) ||
+                (unfollowMutation.isPending && unfollowMutation.variables === user.id);
+              
+              return (
+                <View key={user.id} style={styles.userItem}>
+                  <TouchableOpacity
+                    style={styles.userInfo}
+                    onPress={() => handleUserPress(user.id)}
+                    activeOpacity={0.7}
+                  >
+                    {/* Profile Picture */}
+                    <View style={styles.profileImageContainer}>
+                      {user.picture ? (
+                        <Image
+                          source={{ uri: user.picture }}
+                          style={styles.profileImage}
+                        />
+                      ) : (
+                        <View style={styles.profileImagePlaceholder}>
+                          <Text style={styles.profileImageText}>
+                            {getInitials(user.name)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* User Details */}
+                    <View style={styles.userDetails}>
+                      <View style={styles.nameRow}>
+                        <Text style={styles.userName}>{user.name}</Text>
+                        {/* Note: isVerified is not in the User type yet, can be added later */}
+                      </View>
+                      <Text style={styles.username}>{user.email}</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Follow/Following Button - Hide for current user */}
+                  {!isCurrentUser && (
+                    <TouchableOpacity
+                      style={[
+                        styles.followButton,
+                        isFollowing && styles.followingButton,
+                      ]}
+                      onPress={() => handleFollowToggle(user.id)}
+                      activeOpacity={0.8}
+                      disabled={isPending}
+                    >
+                      {isPending ? (
+                        <ActivityIndicator size="small" color={isFollowing ? "#AF7DFF" : "#FFFFFF"} />
+                      ) : (
+                        <Text
+                          style={[
+                            styles.followButtonText,
+                            isFollowing && styles.followingButtonText,
+                          ]}
+                        >
+                          {isFollowing ? 'Following' : 'Follow'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -288,6 +337,47 @@ const styles = StyleSheet.create({
   },
   followingButtonText: {
     color: '#AF7DFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#4E4C57',
+    marginBottom: 16,
+    fontFamily: 'Montserrat_400Regular',
+  },
+  retryButton: {
+    backgroundColor: '#AF7DFF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Montserrat_600SemiBold',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#4E4C57',
+    fontFamily: 'Montserrat_400Regular',
   },
 });
 

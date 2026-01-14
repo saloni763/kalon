@@ -13,7 +13,7 @@ import VerifiedBadge from '@/components/ui/VerifiedBadge';
 import ShareProfileIcon from '@/components/ui/ShareProfileIcon';
 import EditProfileIcon from '@/components/ui/EditProfileIcon';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
-import { useUser, useUserById } from '@/hooks/queries/useAuth';
+import { useUser, useUserById, useFollowUser, useUnfollowUser } from '@/hooks/queries/useAuth';
 import NotificationIcon from '@/components/ui/NotificationIcon';
 import CalendarIcon from '@/assets/icons/calendar.svg';
 import ShareIcon from '@/assets/icons/Share.svg';
@@ -34,7 +34,6 @@ export default function ProfileScreen() {
   const isOwnProfile = currentUser?.id === userId;
   const [activeTab, setActiveTab] = useState<'Posts' | 'Events'>('Posts');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false); // For others profile
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [profileNotificationsEnabled, setProfileNotificationsEnabled] = useState(false);
   const [showOptionsDrawer, setShowOptionsDrawer] = useState(false);
@@ -66,6 +65,10 @@ export default function ProfileScreen() {
 
   // Like/unlike mutation
   const toggleLikeMutation = useToggleLike();
+  
+  // Follow/unfollow mutations
+  const followUserMutation = useFollowUser();
+  const unfollowUserMutation = useUnfollowUser();
 
   const handleRefresh = async () => {
     try {
@@ -200,8 +203,33 @@ export default function ProfileScreen() {
   }
 
   const handleFollowToggle = () => {
-    setIsFollowing(!isFollowing);
-    showToast.info(isFollowing ? 'Unfollowed' : 'Following');
+    if (!userId || !userData) return;
+    
+    const currentlyFollowing = userData.isFollowing || false;
+    
+    if (currentlyFollowing) {
+      // Unfollow
+      unfollowUserMutation.mutate(userId, {
+        onSuccess: () => {
+          showToast.success('Unfollowed');
+          refetchUser(); // Refresh user data to update isFollowing and counts
+        },
+        onError: (error: any) => {
+          showToast.error(error.message || 'Failed to unfollow user');
+        },
+      });
+    } else {
+      // Follow
+      followUserMutation.mutate(userId, {
+        onSuccess: () => {
+          showToast.success('Following');
+          refetchUser(); // Refresh user data to update isFollowing and counts
+        },
+        onError: (error: any) => {
+          showToast.error(error.message || 'Failed to follow user');
+        },
+      });
+    }
   };
 
   const handleMessage = () => {
@@ -252,8 +280,16 @@ export default function ProfileScreen() {
       icon: <UnfollowIcon />,
       text: 'Unfollow',
       onPress: () => {
-        setIsFollowing(false);
-        showToast.info('Unfollowed user');
+        if (!userId || !userData) return;
+        unfollowUserMutation.mutate(userId, {
+          onSuccess: () => {
+            showToast.success('Unfollowed user');
+            refetchUser();
+          },
+          onError: (error: any) => {
+            showToast.error(error.message || 'Failed to unfollow user');
+          },
+        });
       },
     },
     {
@@ -374,8 +410,10 @@ export default function ProfileScreen() {
                   )}
 
                   {/* Followers count - Show for others profile */}
-                  {!isOwnProfile && (
-                    <Text style={styles.followersCountText}>1.3k Followers</Text>
+                  {!isOwnProfile && userData && (
+                    <Text style={styles.followersCountText}>
+                      {userData.followersCount || 0} {userData.followersCount === 1 ? 'Follower' : 'Followers'}
+                    </Text>
                   )}
                 </View>
               </View>
@@ -410,13 +448,22 @@ export default function ProfileScreen() {
               <View style={styles.actionButtonsContainer}>
                 <View style={styles.actionButtonsContainerLeft}>
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.followingButton, isFollowing && styles.followingButtonActive]}
+                  style={[
+                    styles.actionButton, 
+                    styles.followingButton, 
+                    (userData?.isFollowing || false) && styles.followingButtonActive
+                  ]}
                   onPress={handleFollowToggle}
                   activeOpacity={0.7}
+                  disabled={followUserMutation.isPending || unfollowUserMutation.isPending}
                 >
-                  <Text style={[styles.actionButtonText, styles.followingButtonText]}>
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </Text>
+                  {(followUserMutation.isPending || unfollowUserMutation.isPending) ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={[styles.actionButtonText, styles.followingButtonText]}>
+                      {(userData?.isFollowing || false) ? 'Following' : 'Follow'}
+                    </Text>
+                  )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionButton, styles.messageButton]}
@@ -442,7 +489,7 @@ export default function ProfileScreen() {
             <View style={styles.statsContainer}>
               <TouchableOpacity
                 style={styles.statCard}
-                onPress={() => router.push(`/profile/followers-following?type=followers` as any)}
+                onPress={() => router.push(`/profile/followers-following?type=followers&userId=${userId}` as any)}
                 activeOpacity={0.7}
               >
                 <View style={styles.statIconContainer}>
@@ -450,12 +497,18 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.statTextContainer}>
                   <Text style={styles.statLabel}>Followers</Text>
-                  <Text style={styles.statValue}>5.7k</Text>
+                  <Text style={styles.statValue}>
+                    {userData?.followersCount ? 
+                      userData.followersCount >= 1000 
+                        ? `${(userData.followersCount / 1000).toFixed(1)}k` 
+                        : userData.followersCount.toString()
+                      : '0'}
+                  </Text>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.statCard}
-                onPress={() => router.push(`/profile/followers-following?type=following` as any)}
+                onPress={() => router.push(`/profile/followers-following?type=following&userId=${userId}` as any)}
                 activeOpacity={0.7}
               >
                 <View style={styles.statIconContainer}>
@@ -463,7 +516,13 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.statTextContainer}>
                   <Text style={styles.statLabel}>Following</Text>
-                  <Text style={styles.statValue}>2.1k</Text>
+                  <Text style={styles.statValue}>
+                    {userData?.followingCount ? 
+                      userData.followingCount >= 1000 
+                        ? `${(userData.followingCount / 1000).toFixed(1)}k` 
+                        : userData.followingCount.toString()
+                      : '0'}
+                  </Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -1532,6 +1591,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F5F5F5',
+    height: '100%',
   },
   emptyText: {
     fontSize: 14,
