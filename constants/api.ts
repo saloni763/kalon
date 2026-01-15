@@ -52,4 +52,13 @@ export const API_ROUTES = {
     POSTS: '/api/search/posts',
     UNIFIED: '/api/search',
   },
+  EVENTS: {
+    CREATE: '/api/events/create',
+  },
+  UPLOAD: {
+    IMAGE: '/api/upload/image',
+  },
+  LOCATION: {
+    UPDATE: '/api/auth/update-location',
+  },
 } as const;

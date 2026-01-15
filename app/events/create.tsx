@@ -1,15 +1,19 @@
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Modal, Pressable, Image } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Modal, Pressable, Image, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
 import BackArrowIcon from '@/components/BackArrowIcon';
 import PrivateIcon from '@/assets/icons/private.svg'
 import InviteIcon from '@/assets/icons/invite.svg'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import UploadPhotoIcon from '@/assets/icons/upload-img.svg';
 import DeletePhotoIcon from '@/assets/icons/delete.svg';
+import { useCreateEvent } from '@/hooks/queries/useEvents';
+import { uploadImage } from '@/services/uploadService';
+import { showToast } from '@/utils/toast';
 
 type EventMode = 'Online' | 'Offline';
 
@@ -50,7 +54,7 @@ export default function CreateEventScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   
   // Step management
-  const [currentStep, setCurrentStep] = useState(4); // 1 = Event Info, 2 = Event Category, 3 = Event Type, 4 = Event Thumbnail
+  const [currentStep, setCurrentStep] = useState(1); // 1 = Event Info, 2 = Event Category, 3 = Event Type, 4 = Event Thumbnail
   
   // Form state
   const [eventName, setEventName] = useState('');
@@ -66,6 +70,11 @@ export default function CreateEventScreen() {
   const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const [showAllFriends, setShowAllFriends] = useState(false);
   const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null); // Local image URI before upload
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  
+  // React Query hooks
+  const createEventMutation = useCreateEvent();
 
   const SELECTED_FRIENDS_KEY = '@kalon_selected_friends';
 
@@ -425,21 +434,62 @@ export default function CreateEventScreen() {
   };
 
   const handleCreateEvent = async () => {
-    // TODO: Implement event creation API call
-    console.log('Creating event with data:', {
-      eventName,
-      hostBy,
-      eventDate,
-      fromTime,
-      toTime,
-      description,
-      eventMode,
-      selectedCategory,
-      eventType,
-      selectedFriends,
-      thumbnailUri,
-    });
-    // router.replace('/events/events' as any);
+    try {
+      // Validate form first
+      if (!validateForm()) {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        return;
+      }
+
+      if (!selectedCategory) {
+        setErrors(prev => ({ ...prev, category: 'Please select a category' }));
+        return;
+      }
+
+      let finalThumbnailUri: string | null = null;
+
+      // Step 1: Upload image if one was selected (and it's a local URI, not already a URL)
+      if (selectedImageUri && !selectedImageUri.startsWith('http')) {
+        setIsUploadingImage(true);
+        try {
+          const uploadResponse = await uploadImage(selectedImageUri, 'events');
+          finalThumbnailUri = uploadResponse.imageUrl;
+        } catch (error: any) {
+          setIsUploadingImage(false);
+          showToast.error(error.message || 'Failed to upload image');
+          return;
+        }
+        setIsUploadingImage(false);
+      } else if (thumbnailUri && thumbnailUri.startsWith('http')) {
+        // Already a URL (from previous upload or external source)
+        finalThumbnailUri = thumbnailUri;
+      }
+
+      // Step 2: Prepare event data
+      const eventData = {
+        eventName: eventName.trim(),
+        hostBy: hostBy.trim(),
+        eventDate: eventDate!.toISOString(),
+        fromTime: fromTime!.toISOString(),
+        toTime: toTime!.toISOString(),
+        description: description.trim() || undefined,
+        eventMode,
+        selectedCategory,
+        eventType,
+        selectedFriends: eventType === 'Private' ? selectedFriends : undefined,
+        thumbnailUri: finalThumbnailUri || undefined,
+      };
+
+      // Step 3: Create event
+      await createEventMutation.mutateAsync(eventData);
+
+      // Success - navigate to events list
+      showToast.success('Event created successfully!');
+      router.replace('/events/events' as any);
+    } catch (error: any) {
+      console.error('Error creating event:', error);
+      showToast.error(error.message || 'Failed to create event. Please try again.');
+    }
   };
 
   const handleCategorySelect = (categoryId: string) => {
@@ -448,29 +498,41 @@ export default function CreateEventScreen() {
   };
 
   const handleUploadPhoto = async () => {
-    // TODO: Implement image picker
-    // For now, using a placeholder - install expo-image-picker for full functionality
     try {
-      // This is a placeholder - you'll need to install and use expo-image-picker
-      // const result = await ImagePicker.launchImageLibraryAsync({
-      //   mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      //   allowsEditing: true,
-      //   aspect: [16, 9],
-      //   quality: 0.8,
-      // });
-      // if (!result.canceled) {
-      //   setThumbnailUri(result.assets[0].uri);
-      // }
-      console.log('Upload photo - implement with expo-image-picker');
-      // For demo purposes, set a placeholder image
-      setThumbnailUri('https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800');
+      // Request permission to access media library
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Sorry, we need camera roll permissions to upload images!',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        setSelectedImageUri(imageUri);
+        setThumbnailUri(imageUri); // Show preview
+      }
     } catch (error) {
       console.error('Error picking image:', error);
+      showToast.error('Failed to select image');
     }
   };
 
   const handleDeleteThumbnail = () => {
     setThumbnailUri(null);
+    setSelectedImageUri(null);
   };
 
   return (
@@ -1031,16 +1093,25 @@ export default function CreateEventScreen() {
                           (currentStep === 3 && !eventType)
               }}
             >
-              <Text style={[
-                styles.nextButtonText,
-                (currentStep === 1 && !isFormValid()) || 
-                (currentStep === 2 && !selectedCategory) ||
-                (currentStep === 3 && !eventType)
-                  ? styles.nextButtonTextDisabled 
-                  : styles.nextButtonTextActive
-              ]}>
-                {currentStep === 4 ? 'Create Event' : 'Next'}
-              </Text>
+              {createEventMutation.isPending || isUploadingImage ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={[styles.nextButtonText, styles.nextButtonTextActive, { marginLeft: 8 }]}>
+                    {isUploadingImage ? 'Uploading...' : 'Creating...'}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[
+                  styles.nextButtonText,
+                  (currentStep === 1 && !isFormValid()) || 
+                  (currentStep === 2 && !selectedCategory) ||
+                  (currentStep === 3 && !eventType)
+                    ? styles.nextButtonTextDisabled 
+                    : styles.nextButtonTextActive
+                ]}>
+                  {currentStep === 4 ? 'Create Event' : 'Next'}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -1662,5 +1733,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5EEFF',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

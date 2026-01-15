@@ -17,6 +17,7 @@ import { useUser, useUserById, useFollowUser, useUnfollowUser } from '@/hooks/qu
 import NotificationIcon from '@/components/ui/NotificationIcon';
 import CalendarIcon from '@/assets/icons/calendar.svg';
 import ShareIcon from '@/assets/icons/Share.svg';
+import LockIcon from '@/assets/icons/lock.svg';
 import GlobeIcon from '@/assets/icons/global.svg';
 import NotificationOnIcon from '@/assets/icons/notification-on.svg';
 import ViewProfileIcon from '@/assets/icons/view-profile.svg';
@@ -157,6 +158,11 @@ export default function ProfileScreen() {
     email: 'user@example.com',
     picture: undefined,
   };
+
+  // Check if profile is private and user is not following
+  const isPrivateProfile = !isOwnProfile && 
+    userData?.networkVisibility === 'friends' && 
+    !(userData?.isFollowing || false);
 
 
   const username = displayUser.email
@@ -545,6 +551,21 @@ export default function ProfileScreen() {
               </View>
             )}
 
+            {/* Private Account Section */}
+            {isPrivateProfile && (
+              <View style={styles.privateAccountSection}>
+                <View style={styles.privateAccountIconContainer}>
+                  <LockIcon width={32} height={32} color="#AF7DFF" />
+                </View>
+                <View style={styles.privateAccountTextContainer}>
+                  <Text style={styles.privateAccountTitle}>This account is private</Text>
+                  <Text style={styles.privateAccountDescription}>
+                    Follow this account to see their posts and events.
+                  </Text>
+                </View>
+              </View>
+            )}
+
             {/* Education & Role Section - Only show for own profile */}
             {isOwnProfile && (displayUser.educations?.length > 0 || displayUser.roles?.length > 0) && (
               <View style={styles.section}>
@@ -607,28 +628,30 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {/* Content Tabs */}
-          <View style={styles.tabsContainer}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'Posts' && styles.tabActive]}
-              onPress={() => setActiveTab('Posts')}
-            >
-              <Text style={[styles.tabText, activeTab === 'Posts' && styles.tabTextActive]}>
-                Posts
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'Events' && styles.tabActive]}
-              onPress={() => setActiveTab('Events')}
-            >
-              <Text style={[styles.tabText, activeTab === 'Events' && styles.tabTextActive]}>
-                Events
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {/* Content Tabs - Hide if private profile and not following */}
+          {!isPrivateProfile && (
+            <View style={styles.tabsContainer}>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'Posts' && styles.tabActive]}
+                onPress={() => setActiveTab('Posts')}
+              >
+                <Text style={[styles.tabText, activeTab === 'Posts' && styles.tabTextActive]}>
+                  Posts
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'Events' && styles.tabActive]}
+                onPress={() => setActiveTab('Events')}
+              >
+                <Text style={[styles.tabText, activeTab === 'Events' && styles.tabTextActive]}>
+                  Events
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Posts Feed */}
-          {activeTab === 'Posts' && (
+          {!isPrivateProfile && activeTab === 'Posts' && (
             <>
               {isLoading && !data ? (
                 <View style={styles.loadingContainer}>
@@ -668,7 +691,7 @@ export default function ProfileScreen() {
             </>
           )}
 
-          {activeTab === 'Events' && (
+          {!isPrivateProfile && activeTab === 'Events' && (
             <View style={styles.emptyEventsContainer}>
               <View style={styles.emptyEventsIconContainer}>
                 <View style={styles.emptyEventsIconCircle}>
@@ -1471,6 +1494,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4E4C57',
     lineHeight: 20,
+    fontFamily: 'Montserrat_400Regular',
+  },
+  privateAccountSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  privateAccountIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F5EEFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  privateAccountTextContainer: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  privateAccountTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0D0A1B',
+    marginBottom: 4,
+    fontFamily: 'Montserrat_700Bold',
+  },
+  privateAccountDescription: {
+    fontSize: 14,
+    color: '#4E4C57',
     fontFamily: 'Montserrat_400Regular',
   },
   section: {
