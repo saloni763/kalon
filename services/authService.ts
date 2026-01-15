@@ -78,6 +78,7 @@ export interface UpdatePersonalInfoData {
   gender?: 'Male' | 'Female' | 'Other';
   dateOfBirth?: string;
   aboutMe?: string;
+  picture?: string;
   educations?: EducationEntry[];
   roles?: RoleEntry[];
   skills?: string[];

@@ -1,11 +1,13 @@
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Modal, Pressable } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Modal, Pressable, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState, useRef } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import { useUser } from '@/hooks/queries/useAuth';
 import { useCreatePost } from '@/hooks/queries/usePosts';
 import { showToast } from '@/utils/toast';
+import { uploadImage } from '@/services/uploadService';
 
 export default function CreateScreen() {
   const [postText, setPostText] = useState('');
@@ -15,6 +17,9 @@ export default function CreateScreen() {
   const [showReplyDropdown, setShowReplyDropdown] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ x: 0, y: 0 });
   const dropdownButtonRef = useRef<View>(null);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const insets = useSafeAreaInsets();
   const user = useUser();
   const displayName = user?.name || 'User';
@@ -45,10 +50,35 @@ export default function CreateScreen() {
     }
 
     try {
+      let finalImageUrl: string | undefined;
+
+      // Step 1: Upload image if one is selected
+      if (selectedImageUri && !selectedImageUri.startsWith('http')) {
+        setIsUploadingImage(true);
+        try {
+          const uploadResponse = await uploadImage(selectedImageUri, 'posts');
+          finalImageUrl = uploadResponse.imageUrl;
+        } catch (error: any) {
+          setIsUploadingImage(false);
+          showToast.error(error.message || 'Failed to upload image');
+          return;
+        } finally {
+          setIsUploadingImage(false);
+        }
+      } else if (thumbnailUri && thumbnailUri.startsWith('http')) {
+        // Already a URL (from previous upload or external source)
+        finalImageUrl = thumbnailUri;
+      }
+
       const postData: any = {
         content: postText.trim(),
         replySetting,
       };
+
+      // Add image URL if available
+      if (finalImageUrl) {
+        postData.imageUrl = finalImageUrl;
+      }
 
       // Add poll options if poll is active
       if (isPollActive) {
@@ -71,6 +101,8 @@ export default function CreateScreen() {
       setIsPollActive(false);
       setPollOptions(['Yes', 'No']);
       setReplySetting('Anyone');
+      setSelectedImageUri(null);
+      setThumbnailUri(null);
       
       // Navigate back to home
       setTimeout(() => {
@@ -130,6 +162,44 @@ export default function CreateScreen() {
     }
   };
 
+  const handleUploadPhoto = async () => {
+    try {
+      // Request permission to access media library
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Sorry, we need camera roll permissions to upload images!',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        setSelectedImageUri(imageUri);
+        setThumbnailUri(imageUri); // Show preview
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      showToast.error('Failed to select image');
+    }
+  };
+
+  const handleDeleteThumbnail = () => {
+    setThumbnailUri(null);
+    setSelectedImageUri(null);
+  };
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
@@ -181,6 +251,38 @@ export default function CreateScreen() {
               multiline
               textAlignVertical="top"
             />
+
+            {/* Image Upload Section - Available for both normal posts and polls */}
+            <View style={styles.imageSection}>
+              <TouchableOpacity 
+                style={styles.uploadPhotoContainer}
+                onPress={handleUploadPhoto}
+                activeOpacity={0.7}
+              >
+                <View style={styles.uploadPhotoIconContainer}>
+                  <Ionicons name="image-outline" size={24} color="#AF7DFF" />
+                </View>
+                <Text style={styles.uploadPhotoText}>Add Photo</Text>
+              </TouchableOpacity>
+
+              {/* Thumbnail Display - Show below upload section if image is uploaded */}
+              {thumbnailUri && (
+                <View style={styles.thumbnailContainer}>
+                  <Image
+                    source={{ uri: thumbnailUri }}
+                    style={styles.thumbnailImage}
+                    resizeMode="cover"
+                  />
+                  <TouchableOpacity
+                    style={styles.deleteThumbnailButton}
+                    onPress={handleDeleteThumbnail}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle" size={24} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
 
             {/* Poll Button - Only show if poll is not active */}
             {!isPollActive && (
@@ -261,12 +363,12 @@ export default function CreateScreen() {
             <TouchableOpacity 
               style={[
                 styles.postButton, 
-                (!postText.trim() || (isPollActive && pollOptions.some(opt => !opt.trim())) || createPostMutation.isPending) && styles.postButtonDisabled
+                (!postText.trim() || (isPollActive && pollOptions.some(opt => !opt.trim())) || createPostMutation.isPending || isUploadingImage) && styles.postButtonDisabled
               ]}
               onPress={handlePost}
-              disabled={!postText.trim() || (isPollActive && pollOptions.some(opt => !opt.trim())) || createPostMutation.isPending}
+              disabled={!postText.trim() || (isPollActive && pollOptions.some(opt => !opt.trim())) || createPostMutation.isPending || isUploadingImage}
             >
-              {createPostMutation.isPending ? (
+              {(createPostMutation.isPending || isUploadingImage) ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.postButtonText}>Post</Text>
@@ -617,6 +719,49 @@ const styles = StyleSheet.create({
   modalDropdownContainer: {
     position: 'absolute',
     zIndex: 10000,
+  },
+  imageSection: {
+    marginBottom: 16,
+  },
+  uploadPhotoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5EEFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+  },
+  uploadPhotoIconContainer: {
+    marginRight: 8,
+  },
+  uploadPhotoText: {
+    fontSize: 16,
+    color: '#AF7DFF',
+    fontWeight: '600',
+    fontFamily: 'Montserrat_600SemiBold',
+  },
+  thumbnailContainer: {
+    marginTop: 16,
+    position: 'relative',
+    alignSelf: 'flex-start',
+  },
+  thumbnailImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: '#F0F0F0',
+  },
+  deleteThumbnailButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 12,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

@@ -5,6 +5,7 @@ import { API_ROUTES } from '@/constants/api';
 export interface CreatePostData {
   content: string;
   replySetting?: 'Anyone' | 'Followers' | 'None';
+  imageUrl?: string;
   pollOptions?: string[];
   pollEndDate?: string;
 }
@@ -19,6 +20,7 @@ export interface Post {
   };
   content: string;
   replySetting: 'Anyone' | 'Followers' | 'None';
+  imageUrl?: string;
   pollOptions?: string[];
   pollEndDate?: string;
   likes: number;
