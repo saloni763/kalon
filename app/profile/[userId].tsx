@@ -1,19 +1,21 @@
-import { StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, ActivityIndicator, RefreshControl, Modal, Pressable, Switch, Share } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, ActivityIndicator, RefreshControl, Modal, Pressable, Switch, Share, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useMemo } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { usePosts, useToggleLike } from '@/hooks/queries/usePosts';
 import Post from '@/components/Post-card';
 import { showToast } from '@/utils/toast';
 import { Post as PostType } from '@/services/postService';
 import { User, EducationEntry, RoleEntry } from '@/services/authService';
 import * as Clipboard from 'expo-clipboard';
+import { uploadImage } from '@/services/uploadService';
 import VerifiedBadge from '@/components/ui/VerifiedBadge';
 import ShareProfileIcon from '@/components/ui/ShareProfileIcon';
 import EditProfileIcon from '@/components/ui/EditProfileIcon';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
-import { useUser, useUserById, useFollowUser, useUnfollowUser } from '@/hooks/queries/useAuth';
+import { useUser, useUserById, useFollowUser, useUnfollowUser, useUpdatePersonalInfo } from '@/hooks/queries/useAuth';
 import NotificationIcon from '@/components/ui/NotificationIcon';
 import CalendarIcon from '@/assets/icons/calendar.svg';
 import ShareIcon from '@/assets/icons/Share.svg';
@@ -70,6 +72,9 @@ export default function ProfileScreen() {
   // Follow/unfollow mutations
   const followUserMutation = useFollowUser();
   const unfollowUserMutation = useUnfollowUser();
+  
+  // Update personal info mutation
+  const updatePersonalInfoMutation = useUpdatePersonalInfo();
 
   const handleRefresh = async () => {
     try {
@@ -241,6 +246,63 @@ export default function ProfileScreen() {
   const handleMessage = () => {
     // Navigate to chat with this user
     router.push(`/chats/${userId}` as any);
+  };
+
+  // Handle profile image upload
+  const handleUploadProfileImage = async () => {
+    try {
+      // Request permission to access media library
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Sorry, we need camera roll permissions to upload images!',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [1, 1], // Square aspect ratio for profile pictures
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        
+        // Show loading toast
+        showToast.info('Uploading image...');
+        
+        try {
+          // Upload image to S3
+          const uploadResponse = await uploadImage(imageUri, 'profiles');
+          
+          // Update user profile with the new image URL
+          updatePersonalInfoMutation.mutate(
+            { picture: uploadResponse.imageUrl },
+            {
+              onSuccess: () => {
+                showToast.success('Profile image updated successfully');
+                // Refresh user data
+                refetchUser();
+              },
+              onError: (error: any) => {
+                showToast.error(error.message || 'Failed to update profile image');
+              },
+            }
+          );
+        } catch (uploadError: any) {
+          showToast.error(uploadError.message || 'Failed to upload image');
+        }
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      showToast.error('Failed to select image');
+    }
   };
 
   // Handle native share
@@ -440,10 +502,15 @@ export default function ProfileScreen() {
                 {isOwnProfile && (
                   <TouchableOpacity 
                     style={styles.addIconBadge}
-                    onPress={() => router.push('/create')}
+                    onPress={handleUploadProfileImage}
                     activeOpacity={0.7}
+                    disabled={updatePersonalInfoMutation.isPending}
                   >
-                    <Ionicons name="add" size={12} color="#AF7DFF" />
+                    {updatePersonalInfoMutation.isPending ? (
+                      <ActivityIndicator size="small" color="#AF7DFF" />
+                    ) : (
+                      <Ionicons name="add" size={12} color="#AF7DFF" />
+                    )}
                   </TouchableOpacity>
                 )}
               </View>

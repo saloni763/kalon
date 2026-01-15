@@ -130,6 +130,7 @@ export const useUpdatePersonalInfo = () => {
           ...(newData.email && { email: newData.email }),
           ...(newData.dateOfBirth && { dateOfBirth: newData.dateOfBirth }),
           ...(newData.aboutMe && { aboutMe: newData.aboutMe }),
+          ...(newData.picture !== undefined && { picture: newData.picture }),
           ...(newData.skills && { skills: newData.skills }),
           ...(newData.educations && { educations: newData.educations }),
           ...(newData.roles && { roles: newData.roles }),
@@ -146,6 +147,9 @@ export const useUpdatePersonalInfo = () => {
       
       // Update cached user data with server response
       queryClient.setQueryData(authKeys.user(), data.user);
+      
+      // Also invalidate the userById query for this user to refresh profile pages
+      queryClient.invalidateQueries({ queryKey: authKeys.userById(data.user.id) });
     },
     onError: (error, _newData, context) => {
       // If the mutation fails, use the context returned from onMutate to roll back
