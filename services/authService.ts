@@ -60,6 +60,7 @@ export interface User {
   followersCount?: number;
   followingCount?: number;
   isFollowing?: boolean;
+  isFriend?: boolean;
   createdAt: string;
   updatedAt: string;
 }
