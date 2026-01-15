@@ -54,6 +54,8 @@ export const API_ROUTES = {
   },
   EVENTS: {
     CREATE: '/api/events/create',
+    LIST: '/api/events',
+    GET_BY_ID: (eventId: string) => `/api/events/${eventId}`,
   },
   UPLOAD: {
     IMAGE: '/api/upload/image',

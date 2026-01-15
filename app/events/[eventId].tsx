@@ -1,12 +1,14 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, Share } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, Share, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import ShareIcon from '@/assets/icons/Share.svg';
 import CalendarIcon from '@/components/ui/CalendarIcon';
 import BackArrowIcon from '@/components/BackArrowIcon';
 import { showToast } from '@/utils/toast';
+import { useEvent } from '@/hooks/queries/useEvents';
+import { Event as BackendEvent } from '@/services/eventService';
 
 interface ScheduleItem {
   time: string;
@@ -42,189 +44,141 @@ interface EventDetailType {
   memberAvatars?: string[];
 }
 
-// Sample data - in production, this would come from an API
-const getEventDetail = (eventId: string): EventDetailType | null => {
-  const events: Record<string, EventDetailType> = {
-    '1': {
-      id: '1',
-      title: 'AI & Future Tech Summit 2025',
-      host: 'TechNext Community',
-      date: 'July 15, 2025',
-      time: '10:00 AM - 4:00 PM',
-      location: 'TechSphere Convention Hall, New York, NY',
-      imageUri: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800',
-      videoUri: 'https://example.com/video',
-      joinedCount: 50,
-      isOnline: false,
-      isPublic: false,
-      tag: 'Private',
-      isJoined: false,
-      about: 'Discover the future at AI & Future Tech Summit 2025 — a premier gathering of innovators, tech leaders, and changemakers. Explore cutting-edge advancements in artificial intelligence, machine learning, robotics, and emerging technologies shaping tomorrow.',
-      photos: [
-        'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=400',
-        'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=400',
-        'https://images.unsplash.com/photo-1511578314322-379afb476865?w=400',
-      ],
-      schedule: [
-        {
-          time: '10:00 AM - 10:30 AM',
-          title: 'Opening Ceremony & Keynote Address',
-          speaker: 'Dr. Neha Rathi, Director, FutureTech Institute',
-        },
-        {
-          time: '10:30 AM - 11:15 AM',
-          title: 'AI in Healthcare: Transforming Patient Care',
-          speaker: 'Dr. Sarah Chen, Chief Medical Officer',
-        },
-        {
-          time: '11:15 AM - 12:00 PM',
-          title: 'Machine Learning for Business Intelligence',
-          speaker: 'John Smith, Data Science Lead',
-        },
-        {
-          time: '12:00 PM - 01:00 PM',
-          title: 'Lunch Break & Networking',
-        },
-        {
-          time: '01:00 PM - 01:45 PM',
-          title: 'Robotics and Automation: The Future of Manufacturing',
-          speaker: 'Michael Johnson, Robotics Engineer',
-        },
-        {
-          time: '01:45 PM - 02:30 PM',
-          title: 'Ethics in AI: Building Responsible Technology',
-          speaker: 'Dr. Emily Watson, AI Ethics Researcher',
-        },
-        {
-          time: '02:30 PM - 04:00 PM',
-          title: 'Panel Discussion: The Future of Tech',
-          speaker: 'Multiple Speakers',
-        },
-      ],
-      speakers: [
-        {
-          id: '1',
-          name: 'Dr. Fei-Fei Li',
-          imageUri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-        },
-        {
-          id: '2',
-          name: 'Sam Altman',
-          imageUri: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-        },
-      ],
-      memberAvatars: [
-        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
-        'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      ],
-    },
-    '2': {
-      id: '2',
-      title: 'AI & Future Tech Summit 2025',
-      host: 'TechNext Community',
-      date: 'July 15, 2025',
-      time: '10:00 AM - 4:00 PM',
-      virtualVenue: 'Zoom Meeting',
-      imageUri: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800',
-      videoUri: 'https://example.com/video',
-      joinedCount: 30,
-      isOnline: true,
-      isPublic: false,
-      tag: 'Private',
-      isJoined: false,
-      about: 'Discover the future at AI & Future Tech Summit 2025 — a premier gathering of innovators, tech leaders, and changemakers. Explore cutting-edge advancements in artificial intelligence, machine learning, robotics, and emerging technologies shaping tomorrow.',
-      photos: [
-        'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=400',
-        'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=400',
-        'https://images.unsplash.com/photo-1511578314322-379afb476865?w=400',
-      ],
-      schedule: [
-        {
-          time: '10:00 AM - 10:30 AM',
-          title: 'Opening Ceremony & Keynote Address',
-          speaker: 'Dr. Neha Rathi, Director, FutureTech Institute',
-        },
-        {
-          time: '10:30 AM - 11:15 AM',
-          title: 'AI in Healthcare: Transforming Patient Care',
-          speaker: 'Dr. Sarah Chen, Chief Medical Officer',
-        },
-        {
-          time: '11:15 AM - 12:00 PM',
-          title: 'Machine Learning for Business Intelligence',
-          speaker: 'John Smith, Data Science Lead',
-        },
-        {
-          time: '12:00 PM - 01:00 PM',
-          title: 'Lunch Break & Networking',
-        },
-        {
-          time: '01:00 PM - 01:45 PM',
-          title: 'Robotics and Automation: The Future of Manufacturing',
-          speaker: 'Michael Johnson, Robotics Engineer',
-        },
-        {
-          time: '01:45 PM - 02:30 PM',
-          title: 'Ethics in AI: Building Responsible Technology',
-          speaker: 'Dr. Emily Watson, AI Ethics Researcher',
-        },
-        {
-          time: '02:30 PM - 04:00 PM',
-          title: 'Panel Discussion: The Future of Tech',
-          speaker: 'Multiple Speakers',
-        },
-      ],
-      speakers: [
-        {
-          id: '1',
-          name: 'Dr. Fei-Fei Li',
-          imageUri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-        },
-        {
-          id: '2',
-          name: 'Sam Altman',
-          imageUri: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-        },
-      ],
-      memberAvatars: [
-        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
-        'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      ],
-    },
+// Helper function to format date
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { 
+    month: 'long', 
+    day: 'numeric', 
+    year: 'numeric' 
+  });
+};
+
+// Helper function to format time range
+const formatTimeRange = (startDateTime: string, endDateTime: string): string => {
+  const start = new Date(startDateTime);
+  const end = new Date(endDateTime);
+  
+  const startTime = start.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit',
+    hour12: true 
+  });
+  const endTime = end.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit',
+    hour12: true 
+  });
+  
+  return `${startTime} - ${endTime}`;
+};
+
+// Map backend event to frontend EventDetailType format
+const mapEventToEventDetail = (event: BackendEvent & { memberAvatars?: string[] }): EventDetailType => {
+  return {
+    id: event.id,
+    title: event.eventName,
+    host: event.hostBy,
+    date: formatDate(event.startDateTime),
+    time: formatTimeRange(event.startDateTime, event.endDateTime),
+    location: event.eventMode === 'Offline' ? event.location : undefined,
+    virtualVenue: event.eventMode === 'Online' ? 'Online Event' : undefined,
+    imageUri: event.thumbnailUri,
+    joinedCount: event.attendees,
+    isOnline: event.eventMode === 'Online',
+    isPublic: event.eventType === 'Public',
+    tag: event.eventType,
+    isJoined: event.isJoined || false,
+    about: event.description,
+    photos: [], // Photos not available in current backend model
+    schedule: [], // Schedule not available in current backend model
+    speakers: [], // Speakers not available in current backend model
+    memberAvatars: event.memberAvatars || [],
   };
-  return events[eventId] || null;
 };
 
 export default function EventDetailScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const router = useRouter();
-  const [isJoined, setIsJoined] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [showFullAbout, setShowFullAbout] = useState(false);
 
-  const event = getEventDetail(eventId || '');
+  // Fetch event data using React Query
+  // Best practice: Proper error handling and loading states
+  const { 
+    data, 
+    isLoading, 
+    error, 
+    refetch,
+    isRefetching 
+  } = useEvent(eventId);
 
-  if (!event) {
+  // Map backend event to frontend format
+  const event = useMemo(() => {
+    if (!data?.event) return null;
+    return mapEventToEventDetail(data.event);
+  }, [data?.event]);
+
+  // Loading state
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Event not found</Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#AF7DFF" />
+          <Text style={styles.loadingText}>Loading event...</Text>
         </View>
+        <TouchableOpacity
+          style={styles.backButtonFixed}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <BackArrowIcon width={24} height={24} color="#FFFFFF" />
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
+  // Error state
+  if (error || !event) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>
+            {error instanceof Error ? error.message : 'Event not found'}
+          </Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => {
+              if (error) {
+                refetch();
+              } else {
+                router.back();
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.backButtonText}>
+              {error ? 'Retry' : 'Go Back'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity
+          style={styles.backButtonFixed}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <BackArrowIcon width={24} height={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  const isJoined = event.isJoined || false;
+
   const handleJoin = () => {
-    setIsJoined(!isJoined);
+    // TODO: Implement join event API call
+    console.log('Join event:', event.id);
+    showToast.info(isJoined ? 'Left event' : 'Joined event');
   };
 
   const handleSave = () => {
@@ -246,12 +200,6 @@ export default function EventDetailScreen() {
       }
     }
   };
-
-  const handlePlayVideo = () => {
-    // Video playback functionality
-    console.log('Play video:', event.videoUri);
-  };
-
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.content} edges={['top']}>
@@ -346,14 +294,16 @@ export default function EventDetailScreen() {
                 </View>
               </View>
 
-              {(event.location || event.virtualVenue) && (
+              {event.location && !event.isOnline && (
                 <View style={styles.infoCard}>
-                  <Text style={styles.infoCardLabel}>
-                    {event.isOnline ? 'Virtual Venue' : 'Location'}
-                  </Text>
-                  <Text style={styles.locationText}>
-                    {event.isOnline ? event.virtualVenue : event.location}
-                  </Text>
+                  <Text style={styles.infoCardLabel}>Location</Text>
+                  <Text style={styles.locationText}>{event.location}</Text>
+                </View>
+              )}
+              {event.virtualVenue && event.isOnline && (
+                <View style={styles.infoCard}>
+                  <Text style={styles.infoCardLabel}>Virtual Venue</Text>
+                  <Text style={styles.locationText}>{event.virtualVenue}</Text>
                 </View>
               )}
             </View>
@@ -767,6 +717,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#4E4C57',
+    fontFamily: 'Montserrat_400Regular',
+  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -778,6 +740,7 @@ const styles = StyleSheet.create({
     color: '#4E4C57',
     marginBottom: 20,
     fontFamily: 'Montserrat_400Regular',
+    textAlign: 'center',
   },
   backButton: {
     backgroundColor: '#AF7DFF',
