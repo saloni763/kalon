@@ -164,10 +164,11 @@ export default function ProfileScreen() {
     picture: undefined,
   };
 
-  // Check if profile is private and user is not following
+  // Check if profile is private and user is not a friend
+  // When networkVisibility is 'friends', the account is private and only friends (mutual followers) can see the full profile
   const isPrivateProfile = !isOwnProfile && 
     userData?.networkVisibility === 'friends' && 
-    !(userData?.isFollowing || false);
+    !(userData?.isFriend || false);
 
 
   const username = displayUser.email
