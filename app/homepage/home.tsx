@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Header from '@/components/Header';
 import Post from '@/components/Post-card';
 import { usePosts, useToggleLike } from '@/hooks/queries/usePosts';
+import { useUser } from '@/hooks/queries/useAuth';
 import { showToast } from '@/utils/toast';
 
 import { Post as PostType } from '@/services/postService';
@@ -11,6 +12,7 @@ import * as Clipboard from 'expo-clipboard';
 
 export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState<'trending' | 'following'>('trending');
+  const user = useUser();
 
   // Fetch posts using React Query
   const { 
@@ -129,6 +131,7 @@ export default function HomeScreen() {
         <Header 
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          profileImageUri={user?.picture}
         />
         
         {isLoading && !data ? (

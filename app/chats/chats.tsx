@@ -1,9 +1,14 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, TextInput, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons';
 import SearchIcon from '@/components/ui/SearchIcon';
+import VerifiedBadge from '@/components/ui/VerifiedBadge';
+import { useSearchUsers } from '@/hooks/queries/useSearch';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SearchUser } from '@/services/searchService';
 
 interface Chat {
   id: string;
@@ -86,10 +91,117 @@ const chats: Chat[] = [
   },
 ];
 
+interface RecentSearchItem {
+  id: string;
+  type: 'profile' | 'query';
+  name?: string;
+  username?: string;
+  picture?: string;
+  isVerified?: boolean;
+  query?: string;
+  userId?: string;
+}
+
+const RECENT_SEARCHES_KEY = '@kalon_chat_recent_searches';
+const MAX_RECENT_SEARCHES = 10;
+
+const getInitials = (name: string): string => {
+  return name
+    .split(' ')
+    .map(word => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+};
+
 export default function ChatsScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'message' | 'channels'>('message');
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>([]);
   const totalUnreadCount = chats.filter(chat => chat.unreadCount).reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
+
+  // Load recent searches on mount
+  useEffect(() => {
+    if (isSearchVisible) {
+      loadRecentSearches();
+    }
+  }, [isSearchVisible]);
+
+  const loadRecentSearches = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(RECENT_SEARCHES_KEY);
+      if (stored) {
+        setRecentSearches(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading recent searches:', error);
+    }
+  };
+
+  const saveRecentSearch = async (item: RecentSearchItem) => {
+    try {
+      const updated = [item, ...recentSearches.filter(i => i.id !== item.id)].slice(0, MAX_RECENT_SEARCHES);
+      setRecentSearches(updated);
+      await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+    } catch (error) {
+      console.error('Error saving recent search:', error);
+    }
+  };
+
+  const handleRemoveRecent = async (id: string) => {
+    try {
+      const updated = recentSearches.filter(item => item.id !== id);
+      setRecentSearches(updated);
+      await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+    } catch (error) {
+      console.error('Error removing recent search:', error);
+    }
+  };
+
+  // Search users hook
+  const hasSearchQuery = searchQuery.trim().length > 0;
+  const {
+    data: usersData,
+    isLoading: isLoadingUsers,
+  } = useSearchUsers(searchQuery, 1, 20, hasSearchQuery && isSearchVisible);
+
+  const searchResults = usersData?.users || [];
+
+  // Save to recent searches when user is selected
+  const handleUserSelect = (user: SearchUser) => {
+    // Save to recent searches
+    saveRecentSearch({
+      id: user.id,
+      type: 'profile',
+      name: user.name,
+      username: user.email,
+      picture: user.picture,
+      isVerified: user.isVerified,
+      userId: user.id,
+    });
+
+    // Navigate to chat
+    setIsSearchVisible(false);
+    setSearchQuery('');
+    router.push(`/chats/${user.id}` as any);
+  };
+
+  const handleSearchItemPress = (item: RecentSearchItem) => {
+    if (item.type === 'profile' && item.userId) {
+      setIsSearchVisible(false);
+      setSearchQuery('');
+      router.push(`/chats/${item.userId}` as any);
+    } else if (item.type === 'query' && item.query) {
+      setSearchQuery(item.query);
+    }
+  };
+
+  const handleCloseSearch = () => {
+    setIsSearchVisible(false);
+    setSearchQuery('');
+  };
 
   const renderChatItem = (chat: Chat) => (
     <TouchableOpacity
@@ -131,7 +243,11 @@ export default function ChatsScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Chats</Text>
           <View style={styles.headerIcons}>
-            <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
+            <TouchableOpacity 
+              style={styles.iconButton} 
+              activeOpacity={0.7}
+              onPress={() => setIsSearchVisible(true)}
+            >
               <SearchIcon width={24} height={24} color="#7436D7" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
@@ -172,6 +288,164 @@ export default function ChatsScreen() {
           {chats.map(renderChatItem)}
         </ScrollView>
       </SafeAreaView>
+
+      {/* Search Modal */}
+      <Modal
+        visible={isSearchVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleCloseSearch}
+      >
+        <View style={styles.searchContainer}>
+          <SafeAreaView style={styles.searchContent} edges={['top']}>
+            {/* Search Header */}
+            <View style={styles.searchHeader}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={handleCloseSearch}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-back" size={24} color="#0D0A1B" />
+              </TouchableOpacity>
+              <View style={styles.searchBar}>
+                <View style={styles.searchIconWrapper}>
+                  <SearchIcon width={20} height={20} color="#4E4C57" />
+                </View>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search"
+                  placeholderTextColor="#4E4C57"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoFocus
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchQuery('')}
+                    style={styles.clearButton}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={18} color="#4E4C57" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Search Results */}
+            <ScrollView style={styles.searchScrollView} contentContainerStyle={styles.searchScrollContent}>
+              {!hasSearchQuery ? (
+                // Recent Searches
+                recentSearches.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No recent searches</Text>
+                  </View>
+                ) : (
+                  recentSearches.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.searchItem}
+                      onPress={() => handleSearchItemPress(item)}
+                      activeOpacity={0.7}
+                    >
+                      {item.type === 'profile' ? (
+                        <>
+                          <View style={styles.searchProfileImageContainer}>
+                            {item.picture ? (
+                              <Image
+                                source={{ uri: item.picture }}
+                                style={styles.searchProfileImage}
+                              />
+                            ) : (
+                              <View style={styles.profileImagePlaceholder}>
+                                <Text style={styles.profileImageText}>
+                                  {item.name ? getInitials(item.name) : 'U'}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.searchItemContent}>
+                            <View style={styles.nameRow}>
+                              <Text style={styles.searchItemName}>{item.name}</Text>
+                              {item.isVerified && (
+                                <View style={styles.verifiedBadge}>
+                                  <VerifiedBadge width={16} height={16} color="#7436D7" />
+                                </View>
+                              )}
+                            </View>
+                            <Text style={styles.searchItemUsername}>{item.username}</Text>
+                          </View>
+                        </>
+                      ) : (
+                        <>
+                          <View style={styles.searchIconContainer}>
+                            <SearchIcon width={20} height={20} color="#4E4C57" />
+                          </View>
+                          <Text style={styles.recentQueryText}>{item.query}</Text>
+                        </>
+                      )}
+                      <TouchableOpacity
+                        style={styles.removeButton}
+                        onPress={() => handleRemoveRecent(item.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="close" size={18} color="#4E4C57" />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  ))
+                )
+              ) : (
+                // Search Results
+                isLoadingUsers ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#7436D7" />
+                    <Text style={styles.loadingText}>Searching...</Text>
+                  </View>
+                ) : searchResults.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No users found</Text>
+                  </View>
+                ) : (
+                  searchResults.map((user) => (
+                    <TouchableOpacity
+                      key={user.id}
+                      style={styles.searchItem}
+                      onPress={() => handleUserSelect(user)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.searchProfileImageContainer}>
+                        {user.picture ? (
+                          <Image
+                            source={{ uri: user.picture }}
+                            style={styles.searchProfileImage}
+                          />
+                        ) : (
+                          <View style={styles.profileImagePlaceholder}>
+                            <Text style={styles.profileImageText}>
+                              {getInitials(user.name)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.searchItemContent}>
+                        <View style={styles.nameRow}>
+                          <Text style={styles.searchItemName}>{user.name}</Text>
+                          {user.isVerified && (
+                            <View style={styles.verifiedBadge}>
+                              <VerifiedBadge width={16} height={16} color="#7436D7" />
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.searchItemUsername}>{user.email}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -338,5 +612,151 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Montserrat_600SemiBold',
   },
+  // Search Modal Styles
+  searchContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  searchContent: {
+    flex: 1,
+  },
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  searchIconWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0D0A1B',
+    fontFamily: 'Montserrat_400Regular',
+    padding: 0,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  searchScrollView: {
+    flex: 1,
+  },
+  searchScrollContent: {
+    paddingTop: 8,
+  },
+  searchItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  searchProfileImageContainer: {
+    marginRight: 12,
+  },
+  searchProfileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+  },
+  profileImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5EEFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileImageText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#AF7DFF',
+    fontFamily: 'Montserrat_600SemiBold',
+  },
+  searchItemContent: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  searchItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0D0A1B',
+    marginRight: 4,
+    fontFamily: 'Montserrat_600SemiBold',
+  },
+  verifiedBadge: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchItemUsername: {
+    fontSize: 14,
+    color: '#4E4C57',
+    marginTop: 2,
+    fontFamily: 'Montserrat_400Regular',
+  },
+  searchIconContainer: {
+    marginRight: 12,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recentQueryText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0D0A1B',
+    fontFamily: 'Montserrat_400Regular',
+  },
+  removeButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#4E4C57',
+    fontFamily: 'Montserrat_400Regular',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#4E4C57',
+    fontFamily: 'Montserrat_400Regular',
+  },
 });
-

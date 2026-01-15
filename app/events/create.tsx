@@ -26,6 +26,7 @@ interface FormErrors {
   fromTime?: string;
   toTime?: string;
   description?: string;
+  location?: string;
   category?: string;
   eventType?: string;
 }
@@ -63,6 +64,7 @@ export default function CreateEventScreen() {
   const [fromTime, setFromTime] = useState<Date | null>(null);
   const [toTime, setToTime] = useState<Date | null>(null);
   const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
   const [eventMode, setEventMode] = useState<EventMode>('Online');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [eventType, setEventType] = useState<EventType>('Public');
@@ -230,6 +232,18 @@ export default function CreateEventScreen() {
     return undefined;
   };
 
+  const validateLocation = (loc: string, mode: EventMode): string | undefined => {
+    if (mode === 'Offline') {
+      if (!loc.trim()) {
+        return 'Location is required for offline events';
+      }
+      if (loc.trim().length > 200) {
+        return 'Location must be less than 200 characters';
+      }
+    }
+    return undefined;
+  };
+
   // Handle field changes with validation
   const handleEventNameChange = (text: string) => {
     setEventName(text);
@@ -252,6 +266,29 @@ export default function CreateEventScreen() {
     if (errors.description) {
       const error = validateDescription(text);
       setErrors(prev => ({ ...prev, description: error }));
+    }
+  };
+
+  const handleLocationChange = (text: string) => {
+    setLocation(text);
+    if (errors.location) {
+      const error = validateLocation(text, eventMode);
+      setErrors(prev => ({ ...prev, location: error }));
+    }
+  };
+
+  const handleEventModeChange = (mode: EventMode) => {
+    setEventMode(mode);
+    // Clear location when switching to Online mode
+    if (mode === 'Online') {
+      setLocation('');
+      setErrors(prev => ({ ...prev, location: undefined }));
+    } else {
+      // Validate location when switching to Offline mode
+      if (location.trim()) {
+        const error = validateLocation(location, mode);
+        setErrors(prev => ({ ...prev, location: error }));
+      }
     }
   };
 
@@ -353,6 +390,7 @@ export default function CreateEventScreen() {
     newErrors.fromTime = timeErrors.fromError;
     newErrors.toTime = timeErrors.toError;
     newErrors.description = validateDescription(description);
+    newErrors.location = validateLocation(location, eventMode);
     
     setErrors(newErrors);
     
@@ -361,6 +399,7 @@ export default function CreateEventScreen() {
   };
 
   const isFormValid = (): boolean => {
+    const locationValid = eventMode === 'Online' || (eventMode === 'Offline' && location.trim().length > 0);
     return (
       eventName.trim().length >= 3 &&
       hostBy.trim().length >= 2 &&
@@ -368,7 +407,8 @@ export default function CreateEventScreen() {
       fromTime !== null &&
       toTime !== null &&
       toTime > fromTime &&
-      (description.trim().length === 0 || description.trim().length <= 500)
+      (description.trim().length === 0 || description.trim().length <= 500) &&
+      locationValid
     );
   };
 
@@ -476,6 +516,7 @@ export default function CreateEventScreen() {
         eventMode,
         selectedCategory,
         eventType,
+        location: eventMode === 'Offline' ? location.trim() : undefined,
         selectedFriends: eventType === 'Private' ? selectedFriends : undefined,
         thumbnailUri: finalThumbnailUri || undefined,
       };
@@ -769,7 +810,7 @@ export default function CreateEventScreen() {
                 <View style={styles.radioContainer}>
                   <TouchableOpacity
                     style={styles.radioOption}
-                    onPress={() => setEventMode('Online')}
+                    onPress={() => handleEventModeChange('Online')}
                     activeOpacity={0.7}
                     accessibilityLabel="Online event"
                     accessibilityRole="radio"
@@ -782,7 +823,7 @@ export default function CreateEventScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.radioOption}
-                    onPress={() => setEventMode('Offline')}
+                    onPress={() => handleEventModeChange('Offline')}
                     activeOpacity={0.7}
                     accessibilityLabel="Offline event"
                     accessibilityRole="radio"
@@ -795,6 +836,31 @@ export default function CreateEventScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Location - Only show for Offline events */}
+              {eventMode === 'Offline' && (
+                <View style={styles.fieldContainer}>
+                  <Text style={styles.label}>Location</Text>
+                  <View style={[styles.inputWrapper, errors.location && styles.inputWrapperError]}>
+                    <TextInput
+                      style={styles.input}
+                      value={location}
+                      onChangeText={handleLocationChange}
+                      placeholder="Enter event location"
+                      placeholderTextColor="#999999"
+                      autoCapitalize="words"
+                      accessibilityLabel="Event location"
+                      accessibilityHint="Required for offline events"
+                    />
+                    {errors.location && (
+                      <Text style={styles.errorText} accessibilityLiveRegion="polite">
+                        {errors.location}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={[styles.inputUnderline, errors.location && styles.inputUnderlineError]} />
+                </View>
+              )}
             </View>
           </>
             ) : currentStep === 2 ? (

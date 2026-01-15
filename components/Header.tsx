@@ -7,7 +7,6 @@ import NotificationsIcon from './ui/NotificationIcon';
 
 interface HeaderProps {
   profileImageUri?: string;
-  username?: string;
   planName?: string;
   onUpgradePress?: () => void;
   onGlobePress?: () => void;
@@ -17,8 +16,6 @@ interface HeaderProps {
 }
 
 export default function Header({
-  profileImageUri = 'https://via.placeholder.com/48',
-  username,
   planName = 'Basic Plan',
   onUpgradePress,
   onGlobePress,
@@ -27,7 +24,9 @@ export default function Header({
   onTabChange,
 }: HeaderProps) {
   const user = useUser();
-  const displayName = username || user?.name || 'User';
+  const displayName = user?.name || 'User';
+  // Use profileImageUri prop if provided, otherwise use user's picture, or fallback to placeholder
+  const imageUri = user?.picture || 'https://via.placeholder.com/48';
 
   return (
     <View style={styles.headerContainer}>
@@ -43,7 +42,7 @@ export default function Header({
         >
           <View style={styles.profileImageContainer}>
             <Image
-              source={{ uri: profileImageUri }}
+              source={{ uri: imageUri }}
               style={styles.profileImage}
               defaultSource={require('@/assets/images/icon.png')}
             />

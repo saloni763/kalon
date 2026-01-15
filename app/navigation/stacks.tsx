@@ -87,7 +87,7 @@ function RootStack() {
           }} 
         />
         <Stack.Screen 
-          name="create" 
+          name="post/create" 
           options={{ 
             headerShown: false,
           }} 

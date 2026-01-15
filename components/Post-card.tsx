@@ -128,6 +128,7 @@ export default function Post({
   const [showUnfollowConfirm, setShowUnfollowConfirm] = useState(false);
   const [showMuteConfirm, setShowMuteConfirm] = useState(false);
   const [showReportDrawer, setShowReportDrawer] = useState(false);
+  const [showImageViewer, setShowImageViewer] = useState(false);
   const [localIsLiked, setLocalIsLiked] = useState(isLiked);
   const [isCommented, setIsCommented] = useState(false);
   const [isShared, setIsShared] = useState(false);
@@ -284,7 +285,7 @@ export default function Post({
           )}
           <TouchableOpacity 
             style={styles.addIconBadge}
-            onPress={() => router.push('/create')}
+            onPress={() => router.push('/post/create')}
             activeOpacity={0.7}
           >
             <Ionicons name="add" size={12} color="#AF7DFF" />
@@ -313,6 +314,51 @@ export default function Post({
           <Ionicons name="ellipsis-horizontal" size={20} color="#4E4C57" />
         </TouchableOpacity>
       </View>
+
+      {/* Post Image */}
+      {post.imageUrl ? (
+        <>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => setShowImageViewer(true)}
+            style={styles.postImageContainer}
+          >
+            <Image
+              source={{ uri: post.imageUrl }}
+              style={styles.postImage}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
+
+          {/* Fullscreen Image Viewer */}
+          <Modal
+            visible={showImageViewer}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowImageViewer(false)}
+          >
+            <Pressable
+              style={styles.imageViewerOverlay}
+              onPress={() => setShowImageViewer(false)}
+            >
+              <View style={styles.imageViewerContent}>
+                <Image
+                  source={{ uri: post.imageUrl }}
+                  style={styles.imageViewerImage}
+                  resizeMode="contain"
+                />
+                <Pressable
+                  style={styles.imageViewerCloseButton}
+                  onPress={() => setShowImageViewer(false)}
+                  hitSlop={10}
+                >
+                  <Ionicons name="close" size={22} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            </Pressable>
+          </Modal>
+        </>
+      ) : null}
 
       {/* Post Content */}
       {contentWithoutHashtags ? (
@@ -704,6 +750,46 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 12,
     fontFamily: 'Montserrat_600SemiBold',
+  },
+  postImageContainer: {
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: '#F5F5F5',
+  },
+  postImage: {
+    width: '100%',
+    height: 260,
+    backgroundColor: '#F5F5F5',
+  },
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerContent: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  imageViewerImage: {
+    width: '100%',
+    height: '80%',
+  },
+  imageViewerCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pollContainer: {
     marginBottom: 12,

@@ -19,7 +19,7 @@ type TabItem = {
 const tabs: TabItem[] = [
   { name: 'home', route: '/homepage/home', icon: 'home', label: 'Home' },
   { name: 'search', route: '/search/search', icon: 'search', label: 'Search' },
-  { name: 'create', route: '/create', icon: 'add', label: '' }, // Special button, no label
+  { name: 'create', route: '/post/create', icon: 'add', label: '' }, // Special button, no label
   { name: 'chats', route: '/chats/chats', icon: 'chatbubble-outline', label: 'Chats' },
   { name: 'events', route: '/events/events', icon: 'calendar-outline', label: 'Events' },
 ];
