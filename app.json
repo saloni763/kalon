@@ -10,13 +10,26 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kalon.app"
+      "bundleIdentifier": "com.kalon.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "We need access to your photos to upload event images and profile pictures.",
+        "NSPhotoLibraryAddUsageDescription": "We need permission to save images to your photo library.",
+        "NSLocationWhenInUseUsageDescription": "We need access to your location to provide location-based features and improve your app experience.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need access to your location to provide location-based features and improve your app experience."
+      }
     },
     "android": {
       "package": "com.kalon.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app-logo.png"
-      }
+      },
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "output": "static",
@@ -24,7 +37,20 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to upload event images and profile pictures.",
+          "cameraPermission": "The app accesses your camera to take photos for events and profile pictures."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Kalon to use your location to provide location-based features and improve your app experience."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

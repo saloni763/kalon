@@ -8,7 +8,7 @@ import BottomTabNavigator from '@/components/BottomTabNavigator';
  * Handles all routes in the application
  * Note: Initial routing is handled by app/index.tsx based on authentication status
  */
-export function RootStack() {
+function RootStack() {
   return (
     <View style={styles.container}>
       <Stack
@@ -93,7 +93,7 @@ export function RootStack() {
           }} 
         />
         <Stack.Screen 
-          name="events" 
+          name="events/events" 
           options={{ 
             headerShown: false,
           }} 
@@ -277,4 +277,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+// Named export for use in _layout.tsx
+export { RootStack };
+
+// Default export for Expo Router
+export default RootStack;
 

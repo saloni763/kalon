@@ -8,17 +8,45 @@ import {
   TouchableOpacity,
   PanResponder,
   Pressable,
+  Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { skillCategories } from '@/constants/skills';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FilterState } from '@/components/FilterModal';
 import SearchIcon from '@/components/ui/SearchIcon';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
+import CalendarIcon from '@/assets/icons/calendar.svg';
 
 const FILTERS_STORAGE_KEY = '@kalon_search_filters';
+const POST_FILTERS_STORAGE_KEY = '@kalon_post_search_filters';
+
+// Post filter types
+interface PostFilterState {
+  keywords: string;
+  postTypes: string[]; // 'Text' | 'Image' | 'Blogs' | 'Poll'
+  dateFrom: string;
+  dateTo: string;
+  sortBy: 'mostLiked' | 'mostRecent' | null;
+}
+
+const DEFAULT_POST_FILTERS: PostFilterState = {
+  keywords: '',
+  postTypes: [],
+  dateFrom: '',
+  dateTo: '',
+  sortBy: null,
+};
+
+const POST_TYPE_OPTIONS = ['Text', 'Image', 'Blogs', 'Poll'];
+const SORT_BY_OPTIONS = [
+  { value: 'mostLiked', label: 'Most Liked' },
+  { value: 'mostRecent', label: 'Most Recent' },
+];
 
 const NATIONALITY_OPTIONS = [
   'United States',
@@ -172,9 +200,18 @@ const DEFAULT_FILTERS: FilterState = {
 type LocalEducationState = string[];
 
 export default function FilterScreen() {
-  const params = useLocalSearchParams<{ filters?: string }>();
+  const params = useLocalSearchParams<{ filters?: string; type?: string }>();
+  const filterType = params.type || 'people'; // 'post' or 'people'
+  const isPostFilter = filterType === 'post';
+  
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  const [postFilters, setPostFilters] = useState<PostFilterState>(DEFAULT_POST_FILTERS);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  
+  // Date picker state
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [activeDateField, setActiveDateField] = useState<'from' | 'to' | null>(null);
+  const [tempDate, setTempDate] = useState<Date>(new Date());
   const [jobOccupationSearch, setJobOccupationSearch] = useState('');
   const [educationLevelSearch, setEducationLevelSearch] = useState('');
   const [nationalitySearch, setNationalitySearch] = useState('');
@@ -196,26 +233,36 @@ export default function FilterScreen() {
 
   const loadFilters = async () => {
     try {
-      if (params.filters) {
-        const parsed = JSON.parse(decodeURIComponent(params.filters));
-        const loadedFilters = { ...DEFAULT_FILTERS, ...parsed };
-        setFilters(loadedFilters);
-        // Convert educationLevel string to array for checkbox UI
-        if (loadedFilters.educationLevel && typeof loadedFilters.educationLevel === 'string') {
-          setEducationLevels([loadedFilters.educationLevel]);
-        } else if (Array.isArray(loadedFilters.educationLevel)) {
-          setEducationLevels(loadedFilters.educationLevel);
+      if (isPostFilter) {
+        // Load post filters
+        const stored = await AsyncStorage.getItem(POST_FILTERS_STORAGE_KEY);
+        if (stored) {
+          const loadedFilters = { ...DEFAULT_POST_FILTERS, ...JSON.parse(stored) };
+          setPostFilters(loadedFilters);
         }
       } else {
-        const stored = await AsyncStorage.getItem(FILTERS_STORAGE_KEY);
-        if (stored) {
-          const loadedFilters = { ...DEFAULT_FILTERS, ...JSON.parse(stored) };
+        // Load user filters
+        if (params.filters) {
+          const parsed = JSON.parse(decodeURIComponent(params.filters));
+          const loadedFilters = { ...DEFAULT_FILTERS, ...parsed };
           setFilters(loadedFilters);
           // Convert educationLevel string to array for checkbox UI
           if (loadedFilters.educationLevel && typeof loadedFilters.educationLevel === 'string') {
             setEducationLevels([loadedFilters.educationLevel]);
           } else if (Array.isArray(loadedFilters.educationLevel)) {
             setEducationLevels(loadedFilters.educationLevel);
+          }
+        } else {
+          const stored = await AsyncStorage.getItem(FILTERS_STORAGE_KEY);
+          if (stored) {
+            const loadedFilters = { ...DEFAULT_FILTERS, ...JSON.parse(stored) };
+            setFilters(loadedFilters);
+            // Convert educationLevel string to array for checkbox UI
+            if (loadedFilters.educationLevel && typeof loadedFilters.educationLevel === 'string') {
+              setEducationLevels([loadedFilters.educationLevel]);
+            } else if (Array.isArray(loadedFilters.educationLevel)) {
+              setEducationLevels(loadedFilters.educationLevel);
+            }
           }
         }
       }
@@ -225,19 +272,28 @@ export default function FilterScreen() {
   };
 
   const handleReset = () => {
-    setFilters(DEFAULT_FILTERS);
-    setEducationLevels([]);
+    if (isPostFilter) {
+      setPostFilters(DEFAULT_POST_FILTERS);
+    } else {
+      setFilters(DEFAULT_FILTERS);
+      setEducationLevels([]);
+    }
   };
 
   const handleApply = async () => {
     try {
-      // Convert educationLevels array back to string (or keep as array if needed)
-      const filtersToSave = {
-        ...filters,
-        educationLevel: educationLevels.length > 0 ? (educationLevels.length === 1 ? educationLevels[0] : educationLevels) : null,
-      };
-      // Save filters to storage
-      await AsyncStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filtersToSave));
+      if (isPostFilter) {
+        // Save post filters
+        await AsyncStorage.setItem(POST_FILTERS_STORAGE_KEY, JSON.stringify(postFilters));
+      } else {
+        // Convert educationLevels array back to string (or keep as array if needed)
+        const filtersToSave = {
+          ...filters,
+          educationLevel: educationLevels.length > 0 ? (educationLevels.length === 1 ? educationLevels[0] : educationLevels) : null,
+        };
+        // Save filters to storage
+        await AsyncStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filtersToSave));
+      }
       // Navigate back with filters as params
       router.back();
     } catch (error) {
@@ -1580,6 +1636,200 @@ export default function FilterScreen() {
     );
   };
 
+  // Date formatting helpers
+  const formatDateDisplay = (date: Date): string => {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = String(date.getFullYear()).slice(-2);
+    return `${day} / ${month} / ${year}`;
+  };
+
+  const parseDateFromDisplay = (dateString: string): Date | null => {
+    if (!dateString) return null;
+    try {
+      const parts = dateString.split(' / ');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = 2000 + parseInt(parts[2], 10);
+        return new Date(year, month, day);
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  };
+
+  // Date picker handlers
+  const openDatePicker = (field: 'from' | 'to') => {
+    const currentDateString = field === 'from' ? postFilters.dateFrom : postFilters.dateTo;
+    const existingDate = parseDateFromDisplay(currentDateString);
+    setTempDate(existingDate || new Date());
+    setActiveDateField(field);
+    setShowDatePicker(true);
+  };
+
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (event.type === 'set' && selectedDate && activeDateField) {
+        const formattedDate = formatDateDisplay(selectedDate);
+        setPostFilters(prev => ({
+          ...prev,
+          [activeDateField === 'from' ? 'dateFrom' : 'dateTo']: formattedDate,
+        }));
+        setActiveDateField(null);
+      } else {
+        setActiveDateField(null);
+      }
+    } else {
+      // iOS - update temp date
+      if (selectedDate) {
+        setTempDate(selectedDate);
+      }
+    }
+  };
+
+  const handleDateConfirm = () => {
+    if (activeDateField) {
+      const formattedDate = formatDateDisplay(tempDate);
+      setPostFilters(prev => ({
+        ...prev,
+        [activeDateField === 'from' ? 'dateFrom' : 'dateTo']: formattedDate,
+      }));
+    }
+    setShowDatePicker(false);
+    setActiveDateField(null);
+  };
+
+  const handleDateCancel = () => {
+    setShowDatePicker(false);
+    setActiveDateField(null);
+  };
+
+  const handlePostTypeToggle = (type: string) => {
+    setPostFilters(prev => {
+      const currentTypes = prev.postTypes || [];
+      if (currentTypes.includes(type)) {
+        return { ...prev, postTypes: currentTypes.filter(t => t !== type) };
+      } else {
+        return { ...prev, postTypes: [...currentTypes, type] };
+      }
+    });
+  };
+
+  const handleSortBySelect = (value: 'mostLiked' | 'mostRecent') => {
+    setPostFilters(prev => ({
+      ...prev,
+      sortBy: prev.sortBy === value ? null : value,
+    }));
+  };
+
+  const renderPostFilters = () => {
+    return (
+      <>
+        {/* Keywords / Hashtags */}
+        <View style={styles.filterItem}>
+          <Text style={styles.filterLabel}>Keywords / Hashtags</Text>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Enter keywords or hashtags"
+            placeholderTextColor="#4E4C57"
+            value={postFilters.keywords}
+            onChangeText={text => setPostFilters(prev => ({ ...prev, keywords: text }))}
+          />
+        </View>
+
+        {/* Post Type */}
+        <View style={styles.filterItem}>
+          <Text style={styles.filterLabel}>Post Type</Text>
+          {POST_TYPE_OPTIONS.map((type) => {
+            const isSelected = postFilters.postTypes.includes(type);
+            return (
+              <TouchableOpacity
+                key={type}
+                style={styles.checkboxOption}
+                onPress={() => handlePostTypeToggle(type)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, isSelected && styles.checkboxFilled]}>
+                  {isSelected && (
+                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text style={[styles.checkboxOptionText, isSelected && styles.checkboxOptionTextSelected]}>
+                  {type}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Date Range */}
+        <View style={styles.filterItem}>
+          <Text style={styles.filterLabel}>Date Range</Text>
+          <View style={styles.dateRangeContainer}>
+            <View style={styles.dateInputWrapper}>
+              <Text style={styles.dateLabel}>From</Text>
+              <TouchableOpacity
+                style={styles.dateInputContainer}
+                onPress={() => openDatePicker('from')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.dateInput, !postFilters.dateFrom && styles.dateInputPlaceholder]}>
+                  {postFilters.dateFrom || 'DD / MM / YY'}
+                </Text>
+                <View style={styles.calendarIconButton}>
+                  <CalendarIcon width={20} height={20} />
+                </View>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dateInputWrapper}>
+              <Text style={styles.dateLabel}>To</Text>
+              <TouchableOpacity
+                style={styles.dateInputContainer}
+                onPress={() => openDatePicker('to')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.dateInput, !postFilters.dateTo && styles.dateInputPlaceholder]}>
+                  {postFilters.dateTo || 'DD / MM / YY'}
+                </Text>
+                <View style={styles.calendarIconButton}>
+                  <CalendarIcon width={20} height={20} />
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Sort By */}
+        <View style={styles.filterItem}>
+          <Text style={styles.filterLabel}>Sort By</Text>
+          {SORT_BY_OPTIONS.map((option) => {
+            const isSelected = postFilters.sortBy === option.value;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={styles.radioOption}
+                onPress={() => handleSortBySelect(option.value as 'mostLiked' | 'mostRecent')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.radioButton, isSelected && styles.radioButtonFilled]}>
+                  {isSelected && (
+                    <View style={styles.radioButtonInner} />
+                  )}
+                </View>
+                <Text style={[styles.radioOptionText, isSelected && styles.radioOptionTextSelected]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </>
+    );
+  };
+
   const renderJobOccupationDropdown = () => {
     const isOpen = activeDropdown === 'jobOccupation';
     const currentValue = filters.jobOccupation;
@@ -1703,7 +1953,9 @@ export default function FilterScreen() {
             onPress={handleClose}
             activeOpacity={0.7}
           >
-            <BackArrowCircleIcon width={26} height={26} color="#0D0A1B" />
+            <View style={styles.closeButtonCircle}>
+              <Ionicons name="close" size={20} color="#0D0A1B" />
+            </View>
           </TouchableOpacity>
           <Text style={styles.title}>Filters</Text>
           <TouchableOpacity
@@ -1721,6 +1973,12 @@ export default function FilterScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator
         >
+          {isPostFilter ? (
+            // Post Filters
+            renderPostFilters()
+          ) : (
+            // User Filters
+            <>
           {/* Nationality */}
           {filters.nationality ? (
             <View style={styles.filterItem}>
@@ -1805,6 +2063,8 @@ export default function FilterScreen() {
 
           {/* Identity & Language */}
           {renderIdentityLanguageDropdown()}
+          </>
+          )}
         </ScrollView>
 
         {/* Apply Button */}
@@ -1818,6 +2078,46 @@ export default function FilterScreen() {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      {/* Date Picker Modal (iOS) */}
+      {showDatePicker && Platform.OS === 'ios' && (
+        <Modal
+          transparent
+          animationType="slide"
+          visible={showDatePicker}
+          onRequestClose={handleDateCancel}
+        >
+          <Pressable style={styles.pickerBackdrop} onPress={handleDateCancel}>
+            <View style={styles.pickerSheet} onStartShouldSetResponder={() => true}>
+              <View style={styles.pickerHeaderRow}>
+                <TouchableOpacity onPress={handleDateCancel} activeOpacity={0.7}>
+                  <Text style={styles.pickerHeaderButton}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.pickerHeaderTitle}>Select Date</Text>
+                <TouchableOpacity onPress={handleDateConfirm} activeOpacity={0.7}>
+                  <Text style={styles.pickerHeaderButton}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={handleDateChange}
+              />
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* Date Picker (Android) */}
+      {showDatePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+        />
+      )}
     </View>
   );
 }
@@ -1845,6 +2145,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  closeButtonCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   title: {
     fontSize: 18,
     fontWeight: '600',
@@ -1858,7 +2166,7 @@ const styles = StyleSheet.create({
   resetText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#7436D7',
+    color: '#AF7DFF',
     fontFamily: 'Montserrat_500Medium',
   },
   scrollView: {
@@ -2142,6 +2450,110 @@ const styles = StyleSheet.create({
   jobOptionTextSelected: {
     color: '#7436D7',
     fontFamily: 'Montserrat_500Medium',
+  },
+  // Post filter styles
+  checkboxOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  checkboxOptionText: {
+    fontSize: 16,
+    color: '#0D0A1B',
+    fontFamily: 'Montserrat_400Regular',
+  },
+  checkboxOptionTextSelected: {
+    color: '#7436D7',
+    fontFamily: 'Montserrat_500Medium',
+  },
+  dateRangeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  dateInputWrapper: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 12,
+    color: '#4E4C57',
+    marginBottom: 8,
+    fontFamily: 'Montserrat_400Regular',
+  },
+  dateInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    minHeight: 48,
+  },
+  dateInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0D0A1B',
+    fontFamily: 'Montserrat_400Regular',
+    padding: 0,
+  },
+  dateInputPlaceholder: {
+    color: '#4E4C57',
+  },
+  calendarIconButton: {
+    padding: 4,
+  },
+  // Date picker modal styles
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  pickerHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  pickerHeaderButton: {
+    fontSize: 16,
+    color: '#AF7DFF',
+    fontWeight: '600',
+    fontFamily: 'Montserrat_600SemiBold',
+  },
+  pickerHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0D0A1B',
+    fontFamily: 'Montserrat_600SemiBold',
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  radioOptionText: {
+    fontSize: 16,
+    color: '#0D0A1B',
+    fontFamily: 'Montserrat_400Regular',
+  },
+  radioOptionTextSelected: {
+    color: '#7436D7',
+    fontFamily: 'Montserrat_500Medium',
+  },
+  radioButtonInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
   },
 });
 

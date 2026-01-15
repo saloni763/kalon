@@ -15,6 +15,7 @@ import Toast from 'react-native-toast-message';
 import { toastConfig } from '@/utils/toastConfig';
 import { checkAuthStatus } from '@/utils/authCheck';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useLocationTracking } from '@/hooks/useLocationTracking';
 
 // Keep the native splash screen visible while we load resources
 SplashScreen.preventAutoHideAsync();
@@ -24,6 +25,13 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [isAppReady, setIsAppReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+
+  // Start location tracking when app is ready
+  const { location, error: locationError } = useLocationTracking({
+    enabled: isAppReady && !showSplash, // Only track when app is ready
+    updateInterval: 30000, // Update every 30 seconds
+    sendToBackend: true, // Send location to backend
+  });
   
   // Load fonts
   const [fontsLoaded] = useFonts({

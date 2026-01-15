@@ -511,7 +511,10 @@ export default function SearchScreen() {
           <TouchableOpacity
             style={styles.filterButton}
             activeOpacity={0.7}
-            onPress={() => router.push('/search/filter' as any)}
+            onPress={() => router.push({
+              pathname: '/search/filter' as any,
+              params: { type: activeTab }
+            })}
           >
             <Ionicons name="options-outline" size={24} color="#7436D7" />
           </TouchableOpacity>
