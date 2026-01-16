@@ -41,6 +41,8 @@ export const API_ROUTES = {
     UNFOLLOW_USER: (userId: string) => `/api/auth/user/${userId}/unfollow`,
     GET_FOLLOWERS: (userId: string) => `/api/auth/user/${userId}/followers`,
     GET_FOLLOWING: (userId: string) => `/api/auth/user/${userId}/following`,
+    GET_PRIVACY_SETTINGS: '/api/auth/privacy-settings',
+    UPDATE_PRIVACY_SETTINGS: '/api/auth/privacy-settings',
   },
   POSTS: {
     CREATE: '/api/posts/create',
