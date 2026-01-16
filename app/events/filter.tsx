@@ -10,7 +10,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
 
 const FILTERS_STORAGE_KEY = '@kalon_event_filters';
 
@@ -116,7 +115,7 @@ export default function EventFilterScreen() {
             onPress={handleClose}
             activeOpacity={0.7}
           >
-            <BackArrowCircleIcon width={26} height={26} color="#0D0A1B" />
+            <Ionicons name="close-circle" size={26} color="#0D0A1B" />
           </TouchableOpacity>
           <Text style={styles.title}>Filters</Text>
           <TouchableOpacity
@@ -248,8 +247,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   closeButton: {
     width: 40,
@@ -259,9 +256,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#0D0A1B',
-    fontFamily: 'Montserrat_600SemiBold',
+    fontFamily: 'Montserrat_700Bold',
   },
   resetButton: {
     paddingVertical: 8,
@@ -272,6 +269,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#AF7DFF',
     fontFamily: 'Montserrat_500Medium',
+    opacity: 0.8,
   },
   scrollView: {
     flex: 1,
@@ -356,12 +354,10 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
     backgroundColor: '#FFFFFF',
   },
   applyButton: {
-    backgroundColor: '#AF7DFF',
+    backgroundColor: '#E8D5FF',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',

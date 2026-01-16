@@ -18,6 +18,9 @@ import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
 import { useUser, useUserById, useFollowUser, useUnfollowUser, useUpdatePersonalInfo } from '@/hooks/queries/useAuth';
 import NotificationIcon from '@/components/ui/NotificationIcon';
 import CalendarIcon from '@/assets/icons/calendar.svg';
+import { useEvents } from '@/hooks/queries/useEvents';
+import Event, { EventType } from '@/components/Event-card';
+import { Event as BackendEvent } from '@/services/eventService';
 import ShareIcon from '@/assets/icons/Share.svg';
 import LockIcon from '@/assets/icons/lock.svg';
 import GlobeIcon from '@/assets/icons/global.svg';
@@ -66,6 +69,19 @@ export default function ProfileScreen() {
     userId: userId,
   });
 
+  // Fetch user events
+  const { 
+    data: eventsData, 
+    isLoading: isLoadingEvents, 
+    error: eventsError, 
+    refetch: refetchEvents,
+    isRefetching: isRefetchingEvents 
+  } = useEvents({
+    page: 1,
+    limit: 50,
+    userId: userId,
+  });
+
   // Like/unlike mutation
   const toggleLikeMutation = useToggleLike();
   
@@ -78,7 +94,7 @@ export default function ProfileScreen() {
 
   const handleRefresh = async () => {
     try {
-      await Promise.all([refetchUser(), refetch()]);
+      await Promise.all([refetchUser(), refetch(), refetchEvents()]);
     } catch (error) {
       showToast.error('Failed to refresh');
     }
@@ -194,6 +210,70 @@ export default function ProfileScreen() {
     }
     // If not found, return the ID as fallback (capitalize first letter)
     return skillId.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  // Helper function to format date
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'long', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
+  // Helper function to format time range
+  const formatTimeRange = (startDateTime: string, endDateTime: string): string => {
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    
+    const startTime = start.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+    const endTime = end.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+    
+    return `${startTime} – ${endTime}`;
+  };
+
+  // Map backend event to frontend EventType
+  const mapEventToEventType = (event: BackendEvent, currentUserId?: string): EventType => {
+    return {
+      id: event.id,
+      title: event.eventName,
+      host: event.hostBy,
+      date: formatDate(event.startDateTime),
+      time: formatTimeRange(event.startDateTime, event.endDateTime),
+      location: event.eventMode === 'Offline' ? event.location : undefined,
+      imageUri: event.thumbnailUri,
+      joinedCount: event.attendees,
+      isOnline: event.eventMode === 'Online',
+      isPublic: event.eventType === 'Public',
+      isJoined: event.isJoined || false,
+    };
+  };
+
+  // Map events for display
+  const mappedEvents = useMemo(() => {
+    if (!eventsData?.events) return [];
+    return eventsData.events.map(event => mapEventToEventType(event, currentUser?.id));
+  }, [eventsData?.events, currentUser?.id]);
+
+  const handleEventJoin = (eventId: string) => {
+    console.log('Join event:', eventId);
+  };
+
+  const handleEventShare = (eventId: string) => {
+    console.log('Share event:', eventId);
+  };
+
+  const handleEventSave = (eventId: string) => {
+    console.log('Save event:', eventId);
   };
 
   // Show loading state while fetching user data
@@ -427,11 +507,11 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <ScrollView
+          <ScrollView
           style={styles.scrollView}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching || (isLoadingUser && !!userInfo)}
+              refreshing={isRefetching || isRefetchingEvents || (isLoadingUser && !!userInfo)}
               onRefresh={handleRefresh}
               tintColor="#AF7DFF"
             />
@@ -759,20 +839,47 @@ export default function ProfileScreen() {
             </>
           )}
 
+          {/* Events Feed */}
           {!isPrivateProfile && activeTab === 'Events' && (
-            <View style={styles.emptyEventsContainer}>
-              <View style={styles.emptyEventsIconContainer}>
-                <View style={styles.emptyEventsIconCircle}>
-                  <CalendarIcon width={32} height={32} color="#AF7DFF" />
+            <>
+              {isLoadingEvents && !eventsData ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#AF7DFF" />
                 </View>
-              </View>
-              <Text style={styles.emptyEventsTitle}>No Events</Text>
-              <Text style={styles.emptyEventsDescription}>
-                {isOwnProfile 
-                  ? "You haven't shared any events." 
-                  : "This user hasn't shared any events."}
-              </Text>
-            </View>
+              ) : eventsError ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>Failed to load events</Text>
+                </View>
+              ) : (
+                <>
+                  {mappedEvents.length === 0 ? (
+                    <View style={styles.emptyEventsContainer}>
+                      <View style={styles.emptyEventsIconContainer}>
+                        <View style={styles.emptyEventsIconCircle}>
+                          <CalendarIcon width={32} height={32} color="#AF7DFF" />
+                        </View>
+                      </View>
+                      <Text style={styles.emptyEventsTitle}>No Events</Text>
+                      <Text style={styles.emptyEventsDescription}>
+                        {isOwnProfile 
+                          ? "You haven't shared any events." 
+                          : "This user hasn't shared any events."}
+                      </Text>
+                    </View>
+                  ) : (
+                    mappedEvents.map((event) => (
+                      <Event
+                        key={event.id}
+                        event={event}
+                        onJoin={handleEventJoin}
+                        onShare={handleEventShare}
+                        onSave={handleEventSave}
+                      />
+                    ))
+                  )}
+                </>
+              )}
+            </>
           )}
         </ScrollView>
       </SafeAreaView>

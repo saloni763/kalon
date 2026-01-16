@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Modal, Pressable } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Modal, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Post as PostType } from '@/services/postService';
@@ -19,6 +19,8 @@ import ShareIcon from '@/assets/icons/Share.svg';
 import LikedIcon from '@/assets/icons/liked.svg';
 import CommentedIcon from '@/assets/icons/commented.svg';
 import SharedIcon from '@/assets/icons/shared.svg';
+import { useUser } from '@/hooks/queries/useAuth';
+import { useDeletePost } from '@/hooks/queries/usePosts';
 
 interface PostProps {
   post: PostType;
@@ -35,6 +37,7 @@ interface PostProps {
   onFollow?: (postId: string) => void;
   onReport?: (postId: string) => void;
   onVote?: (postId: string, optionIndex: number) => void;
+  onDelete?: (postId: string) => void;
   isLiked?: boolean;
   isFollowingUser?: boolean;
 }
@@ -121,12 +124,16 @@ export default function Post({
   onFollow,
   onReport,
   onVote,
+  onDelete,
   isLiked = false,
   isFollowingUser = false,
 }: PostProps) {
+  const currentUser = useUser();
+  const deletePostMutation = useDeletePost();
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showUnfollowConfirm, setShowUnfollowConfirm] = useState(false);
   const [showMuteConfirm, setShowMuteConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showReportDrawer, setShowReportDrawer] = useState(false);
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [localIsLiked, setLocalIsLiked] = useState(isLiked);
@@ -163,6 +170,10 @@ export default function Post({
   const username = post.userId.email
     ? `@${post.userId.email.split('@')[0]}`
     : '@user';
+
+  // Check if current user owns this post
+  const postUserId = typeof post.userId === 'string' ? post.userId : post.userId._id;
+  const isOwnPost = currentUser?.id === postUserId;
 
   const handleMenuPress = () => {
     setShowOptionsModal(true);
@@ -203,6 +214,27 @@ export default function Post({
     setShowMuteConfirm(false);
   };
 
+  const handleDeletePress = () => {
+    setShowOptionsModal(false);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      await deletePostMutation.mutateAsync(post.id);
+      onDelete?.(post.id);
+      // Show success message (optional)
+      Alert.alert('Success', 'Post deleted successfully');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to delete post');
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
+  };
+
   // Build options array for the drawer
   const postOptions: OptionItem[] = [
     {
@@ -235,8 +267,8 @@ export default function Post({
       text: 'Mute',
       onPress: handleMutePress,
     },
-    // Conditionally show Follow or Unfollow based on isFollowingUser
-    ...(isFollowingUser
+    // Conditionally show Follow or Unfollow based on isFollowingUser (only for other users' posts)
+    ...(!isOwnPost ? (isFollowingUser
       ? [
           {
             id: 'unfollow',
@@ -252,17 +284,30 @@ export default function Post({
             text: 'Follow',
             onPress: handleFollowPress,
           },
+        ]) : []),
+    // Show delete option only for own posts
+    ...(isOwnPost
+      ? [
+          {
+            id: 'delete',
+            icon: <Ionicons name="trash-outline" size={24} color="#FF3B30" />,
+            text: 'Delete',
+            onPress: handleDeletePress,
+            isDanger: true,
+          },
+        ]
+      : [
+          {
+            id: 'report',
+            icon: <ReportIcon />,
+            text: 'Report',
+            onPress: () => {
+              setShowOptionsModal(false);
+              setShowReportDrawer(true);
+            },
+            isDanger: true,
+          },
         ]),
-    {
-      id: 'report',
-      icon: <ReportIcon />,
-      text: 'Report',
-      onPress: () => {
-        setShowOptionsModal(false);
-        setShowReportDrawer(true);
-      },
-      isDanger: true,
-    },
   ];
 
   return (
@@ -640,6 +685,46 @@ export default function Post({
               style={styles.cancelButton}
               onPress={handleCancelMute}
               activeOpacity={0.8}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteConfirm}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelDelete}
+      >
+        <View style={styles.confirmModalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <Text style={styles.confirmModalTitle}>
+              Delete Post?
+            </Text>
+            
+            <Text style={styles.confirmModalDescription}>
+              Are you sure you want to delete this post? This action cannot be undone.
+            </Text>
+            
+            <TouchableOpacity
+              style={[styles.confirmButton, { backgroundColor: '#FF3B30' }]}
+              onPress={handleConfirmDelete}
+              activeOpacity={0.8}
+              disabled={deletePostMutation.isPending}
+            >
+              <Text style={[styles.confirmButtonText, { color: '#FFFFFF' }]}>
+                {deletePostMutation.isPending ? 'Deleting...' : 'Delete'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCancelDelete}
+              activeOpacity={0.8}
+              disabled={deletePostMutation.isPending}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>

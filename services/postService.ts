@@ -109,3 +109,21 @@ export const toggleLike = async (postId: string): Promise<ToggleLikeResponse> =>
   }
 };
 
+// Delete post API call
+export interface DeletePostResponse {
+  message: string;
+  postId: string;
+}
+
+export const deletePost = async (postId: string): Promise<DeletePostResponse> => {
+  try {
+    const response = await api.delete<DeletePostResponse>(
+      API_ROUTES.POSTS.DELETE(postId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to delete post';
+    throw new Error(errorMessage);
+  }
+};
+

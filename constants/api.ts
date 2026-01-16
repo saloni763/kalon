@@ -46,6 +46,7 @@ export const API_ROUTES = {
     CREATE: '/api/posts/create',
     LIST: '/api/posts',
     LIKE: (postId: string) => `/api/posts/${postId}/like`,
+    DELETE: (postId: string) => `/api/posts/${postId}`,
   },
   SEARCH: {
     USERS: '/api/search/users',
