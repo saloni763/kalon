@@ -3,11 +3,13 @@ import {
   createPost, 
   listPosts,
   toggleLike,
+  deletePost,
   CreatePostData, 
   CreatePostResponse,
   ListPostsParams,
   ListPostsResponse,
-  ToggleLikeResponse
+  ToggleLikeResponse,
+  DeletePostResponse
 } from '@/services/postService';
 
 // Query keys - centralized and type-safe
@@ -188,6 +190,89 @@ export const useToggleLike = () => {
       console.error('Toggle like error:', error);
     },
     // Retry logic is handled by queryClient default options
+  });
+};
+
+// Delete post mutation
+// Best practice: Optimistic updates with rollback on error
+export const useDeletePost = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (postId: string) => deletePost(postId),
+    // Optimistic update: Remove post from cache immediately
+    onMutate: async (postId) => {
+      // Cancel outgoing queries to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: postKeys.lists() });
+      await queryClient.cancelQueries({ queryKey: postKeys.detail(postId) });
+
+      // Snapshot previous values for rollback
+      const previousPostsLists = queryClient.getQueriesData<ListPostsResponse>({
+        queryKey: postKeys.lists(),
+      });
+      const previousPostDetail = queryClient.getQueryData(
+        postKeys.detail(postId)
+      );
+
+      // Optimistically remove post from all lists
+      queryClient.setQueriesData<ListPostsResponse>(
+        { queryKey: postKeys.lists() },
+        (oldData) => {
+          if (!oldData) return oldData;
+
+          return {
+            ...oldData,
+            posts: oldData.posts.filter((post) => post.id !== postId),
+            pagination: {
+              ...oldData.pagination,
+              totalPosts: Math.max(0, oldData.pagination.totalPosts - 1),
+            },
+          };
+        }
+      );
+
+      // Remove individual post from cache
+      queryClient.removeQueries({ queryKey: postKeys.detail(postId) });
+
+      return { previousPostsLists, previousPostDetail };
+    },
+    onSuccess: (data, postId) => {
+      // Ensure post is removed from all caches
+      queryClient.setQueriesData<ListPostsResponse>(
+        { queryKey: postKeys.lists() },
+        (oldData) => {
+          if (!oldData) return oldData;
+
+          return {
+            ...oldData,
+            posts: oldData.posts.filter((post) => post.id !== postId),
+            pagination: {
+              ...oldData.pagination,
+              totalPosts: Math.max(0, oldData.pagination.totalPosts - 1),
+            },
+          };
+        }
+      );
+
+      // Remove individual post from cache
+      queryClient.removeQueries({ queryKey: postKeys.detail(postId) });
+    },
+    onError: (error, postId, context) => {
+      // Rollback optimistic update on error
+      if (context?.previousPostsLists) {
+        context.previousPostsLists.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      if (context?.previousPostDetail) {
+        queryClient.setQueryData(postKeys.detail(postId), context.previousPostDetail);
+      }
+      console.error('Delete post error:', error);
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure consistency
+      queryClient.invalidateQueries({ queryKey: postKeys.lists() });
+    },
   });
 };
 

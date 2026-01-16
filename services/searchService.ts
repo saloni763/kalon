@@ -1,5 +1,6 @@
 import api from '@/lib/api';
 import { API_BASE_URL } from '@/constants/api';
+import { FilterState } from '@/components/FilterModal';
 
 export interface SearchUser {
   id: string;
@@ -22,6 +23,7 @@ export interface SearchPost {
   };
   content: string;
   replySetting: 'Anyone' | 'Followers' | 'None';
+  imageUrl?: string;
   likes: number;
   replies: number;
   shares: number;
@@ -58,6 +60,49 @@ export interface SearchPostsResponse {
   };
 }
 
+export interface SearchEvent {
+  id: string;
+  userId: {
+    _id: string;
+    name: string;
+    email: string;
+    picture?: string;
+  };
+  eventName: string;
+  hostBy: string;
+  startDateTime: string;
+  endDateTime: string;
+  description?: string;
+  eventMode: 'Online' | 'Offline';
+  category: string;
+  eventType: 'Public' | 'Private';
+  location?: string;
+  thumbnailUri?: string;
+  attendees: number;
+  isJoined?: boolean;
+  invitedUsers?: Array<{
+    _id: string;
+    name: string;
+    email: string;
+    picture?: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SearchEventsResponse {
+  message: string;
+  events: SearchEvent[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalEvents: number;
+    limit: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
 export interface UnifiedSearchResponse {
   message: string;
   results: {
@@ -67,20 +112,65 @@ export interface UnifiedSearchResponse {
 }
 
 /**
- * Search users by query
+ * Search users by query with optional filters
  */
 export const searchUsers = async (
   query: string,
   page: number = 1,
-  limit: number = 20
+  limit: number = 20,
+  filters?: Partial<FilterState>
 ): Promise<SearchUsersResponse> => {
   try {
+    const params: any = {
+      q: query,
+      page,
+      limit,
+    };
+
+    // Add filter parameters if provided
+    if (filters) {
+      if (filters.nationality) params.nationality = filters.nationality;
+      if (filters.city) params.city = filters.city;
+      if (filters.majorDepartment) params.majorDepartment = filters.majorDepartment;
+      if (filters.ageRange) {
+        params.ageMin = filters.ageRange.min;
+        params.ageMax = filters.ageRange.max;
+      }
+      if (filters.gender) params.gender = filters.gender;
+      if (filters.educationLevel) {
+        // Handle both string and array for educationLevel
+        if (Array.isArray(filters.educationLevel)) {
+          params.educationLevel = filters.educationLevel;
+        } else {
+          params.educationLevel = filters.educationLevel;
+        }
+      }
+      if (filters.jobOccupation) params.jobOccupation = filters.jobOccupation;
+      if (filters.popularInterests && filters.popularInterests.length > 0) {
+        params.popularInterests = filters.popularInterests;
+      }
+      if (filters.creativity && filters.creativity.length > 0) {
+        params.creativity = filters.creativity;
+      }
+      if (filters.sports && filters.sports.length > 0) {
+        params.sports = filters.sports;
+      }
+      if (filters.careerBusiness && filters.careerBusiness.length > 0) {
+        params.careerBusiness = filters.careerBusiness;
+      }
+      if (filters.communityEnvironment && filters.communityEnvironment.length > 0) {
+        params.communityEnvironment = filters.communityEnvironment;
+      }
+      if (filters.healthWellbeing && filters.healthWellbeing.length > 0) {
+        params.healthWellbeing = filters.healthWellbeing;
+      }
+      if (filters.identityLanguage && filters.identityLanguage.length > 0) {
+        params.identityLanguage = filters.identityLanguage;
+      }
+    }
+
     const response = await api.get<SearchUsersResponse>('/api/search/users', {
-      params: {
-        q: query,
-        page,
-        limit,
-      },
+      params,
     });
     return response.data;
   } catch (error: any) {
@@ -90,20 +180,45 @@ export const searchUsers = async (
 };
 
 /**
- * Search posts by query
+ * Post filter interface
+ */
+export interface PostFilterState {
+  keywords: string;
+  postTypes: string[];
+  dateFrom: string;
+  dateTo: string;
+  sortBy: 'mostLiked' | 'mostRecent' | null;
+}
+
+/**
+ * Search posts by query with optional filters
  */
 export const searchPosts = async (
   query: string,
   page: number = 1,
-  limit: number = 20
+  limit: number = 20,
+  filters?: Partial<PostFilterState>
 ): Promise<SearchPostsResponse> => {
   try {
+    const params: any = {
+      q: query,
+      page,
+      limit,
+    };
+
+    // Add post filter parameters if provided
+    if (filters) {
+      if (filters.keywords) params.keywords = filters.keywords;
+      if (filters.postTypes && filters.postTypes.length > 0) {
+        params.postTypes = filters.postTypes;
+      }
+      if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+      if (filters.dateTo) params.dateTo = filters.dateTo;
+      if (filters.sortBy) params.sortBy = filters.sortBy;
+    }
+
     const response = await api.get<SearchPostsResponse>('/api/search/posts', {
-      params: {
-        q: query,
-        page,
-        limit,
-      },
+      params,
     });
     return response.data;
   } catch (error: any) {
@@ -130,6 +245,45 @@ export const unifiedSearch = async (
   } catch (error: any) {
     console.error('Error performing unified search:', error);
     throw new Error(error.message || 'Failed to perform search');
+  }
+};
+
+/**
+ * Search events by query with optional filters
+ */
+export const searchEvents = async (
+  query: string,
+  page: number = 1,
+  limit: number = 20,
+  category?: string,
+  eventType?: 'Public' | 'Private',
+  eventMode?: 'Online' | 'Offline'
+): Promise<SearchEventsResponse> => {
+  try {
+    const params: any = {
+      q: query,
+      page,
+      limit,
+    };
+
+    // Add filter parameters if provided
+    if (category && category !== 'All Events') {
+      params.category = category;
+    }
+    if (eventType) {
+      params.eventType = eventType;
+    }
+    if (eventMode) {
+      params.eventMode = eventMode;
+    }
+
+    const response = await api.get<SearchEventsResponse>('/api/search/events', {
+      params,
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('Error searching events:', error);
+    throw new Error(error.message || 'Failed to search events');
   }
 };
 

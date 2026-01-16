@@ -84,7 +84,7 @@ export default function EventsScreen() {
     if (!user.data?.id) return undefined;
     return {
       page: 1,
-      limit: 10, // Limit to show a few events in "My Events" section
+      limit: 1, // Show only the latest created event
       userId: user.data.id,
     };
   }, [user.data?.id]);
@@ -168,9 +168,13 @@ export default function EventsScreen() {
   };
 
   // Map backend events to frontend EventType format
+  // For "My Events", show only the latest created event
   const mappedMyEvents = useMemo(() => {
-    if (!myEventsData?.events) return [];
-    return myEventsData.events.map(event => mapEventToEventType(event, user.data?.id));
+    if (!myEventsData?.events || myEventsData.events.length === 0) return [];
+    // Backend already returns events sorted by createdAt descending when userId is provided
+    // So we just take the first one (latest)
+    const latestEvent = myEventsData.events[0];
+    return [mapEventToEventType(latestEvent, user.data?.id)];
   }, [myEventsData?.events, user.data?.id]);
 
   const mappedEvents = useMemo(() => {

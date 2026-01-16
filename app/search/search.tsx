@@ -5,10 +5,19 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import SearchIcon from '@/components/ui/SearchIcon';
 import VerifiedBadge from '@/components/ui/VerifiedBadge';
-import { SearchUser, SearchPost } from '@/services/searchService';
+import { SearchUser, SearchPost, SearchEvent, PostFilterState } from '@/services/searchService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSearchUsers, useSearchPosts } from '@/hooks/queries/useSearch';
+import { useSearchUsers, useSearchPosts, useSearchEvents, searchKeys } from '@/hooks/queries/useSearch';
 import { FilterState } from '@/components/FilterModal';
+import PostCard from '@/components/Post-card';
+import { Post } from '@/services/postService';
+import { toggleLike } from '@/services/postService';
+import { useQueryClient } from '@tanstack/react-query';
+import { useFollowUser, useUnfollowUser } from '@/hooks/queries/useAuth';
+import { showToast } from '@/utils/toast';
+import Event, { EventType } from '@/components/Event-card';
+import { Event as BackendEvent } from '@/services/eventService';
+import { useUser } from '@/hooks/queries/useAuth';
 
 type TabType = 'recent' | 'people' | 'post' | 'events';
 
@@ -35,6 +44,9 @@ const getInitials = (name: string): string => {
 };
 
 const FILTERS_STORAGE_KEY = '@kalon_search_filters';
+const POST_FILTERS_STORAGE_KEY = '@kalon_post_search_filters';
+
+const categories = ['All Events', 'Music', 'Sports', 'Community'];
 
 export default function SearchScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('recent');
@@ -42,6 +54,10 @@ export default function SearchScreen() {
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>([]);
   const [suggestedPeople, setSuggestedPeople] = useState<SearchUser[]>([]);
   const [appliedFilters, setAppliedFilters] = useState<FilterState | null>(null);
+  const [appliedPostFilters, setAppliedPostFilters] = useState<PostFilterState | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState('All Events');
+  const queryClient = useQueryClient();
+  const user = useUser();
 
   // Load filters when screen comes into focus
   useFocusEffect(
@@ -52,9 +68,15 @@ export default function SearchScreen() {
 
   const loadFilters = async () => {
     try {
+      // Load user filters
       const stored = await AsyncStorage.getItem(FILTERS_STORAGE_KEY);
       if (stored) {
         setAppliedFilters(JSON.parse(stored));
+      }
+      // Load post filters
+      const postStored = await AsyncStorage.getItem(POST_FILTERS_STORAGE_KEY);
+      if (postStored) {
+        setAppliedPostFilters(JSON.parse(postStored));
       }
     } catch (error) {
       console.error('Error loading filters:', error);
@@ -65,22 +87,36 @@ export default function SearchScreen() {
   const hasSearchQuery = searchQuery.trim().length > 0;
   const shouldSearchUsers = activeTab === 'people' && hasSearchQuery;
   const shouldSearchPosts = activeTab === 'post' && hasSearchQuery;
+  const shouldSearchEvents = activeTab === 'events' && hasSearchQuery;
 
   const {
     data: usersData,
     isLoading: isLoadingUsers,
     error: usersError,
-  } = useSearchUsers(searchQuery, 1, 20, shouldSearchUsers);
+  } = useSearchUsers(searchQuery, 1, 20, shouldSearchUsers, appliedFilters || undefined);
 
   const {
     data: postsData,
     isLoading: isLoadingPosts,
     error: postsError,
-  } = useSearchPosts(searchQuery, 1, 20, shouldSearchPosts);
+  } = useSearchPosts(searchQuery, 1, 20, shouldSearchPosts, appliedPostFilters || undefined);
+
+  const {
+    data: eventsData,
+    isLoading: isLoadingEvents,
+    error: eventsError,
+  } = useSearchEvents(
+    searchQuery,
+    1,
+    50,
+    shouldSearchEvents,
+    selectedCategory !== 'All Events' ? selectedCategory : undefined
+  );
 
   const searchResults = usersData?.users || [];
   const postResults = postsData?.posts || [];
-  const error = usersError?.message || postsError?.message || null;
+  const eventResults = eventsData?.events || [];
+  const error = usersError?.message || postsError?.message || eventsError?.message || null;
 
   // Load recent searches from storage on mount
   useEffect(() => {
@@ -138,19 +174,59 @@ export default function SearchScreen() {
     }
   };
 
+  const followMutation = useFollowUser();
+  const unfollowMutation = useUnfollowUser();
+
   const handleFollowToggle = (userId: string, isSuggested: boolean = false) => {
-    // TODO: Implement actual follow/unfollow API call with mutation
-    if (isSuggested) {
-      setSuggestedPeople(prev =>
-        prev.map(user =>
-          user.id === userId
-            ? { ...user, isFollowing: !user.isFollowing }
-            : user
-        )
-      );
+    const user = isSuggested 
+      ? suggestedPeople.find(u => u.id === userId)
+      : searchResults.find(u => u.id === userId);
+    
+    if (!user) return;
+    
+    const currentlyFollowing = user.isFollowing || false;
+    
+    if (currentlyFollowing) {
+      // Unfollow
+      unfollowMutation.mutate(userId, {
+        onSuccess: () => {
+          showToast.success('Unfollowed');
+          // Invalidate all search user queries to refetch with updated following status
+          queryClient.invalidateQueries({ queryKey: searchKeys.all });
+          // Also update local state for suggested people if applicable
+          if (isSuggested) {
+            setSuggestedPeople(prev =>
+              prev.map(u =>
+                u.id === userId ? { ...u, isFollowing: false } : u
+              )
+            );
+          }
+        },
+        onError: (error: any) => {
+          showToast.error(error.message || 'Failed to unfollow user');
+        },
+      });
+    } else {
+      // Follow
+      followMutation.mutate(userId, {
+        onSuccess: () => {
+          showToast.success('Following');
+          // Invalidate all search user queries to refetch with updated following status
+          queryClient.invalidateQueries({ queryKey: searchKeys.all });
+          // Also update local state for suggested people if applicable
+          if (isSuggested) {
+            setSuggestedPeople(prev =>
+              prev.map(u =>
+                u.id === userId ? { ...u, isFollowing: true } : u
+              )
+            );
+          }
+        },
+        onError: (error: any) => {
+          showToast.error(error.message || 'Failed to follow user');
+        },
+      });
     }
-    // Note: For search results, we'd need to invalidate the query cache
-    // after a successful follow/unfollow mutation
   };
 
   const handleUserPress = (userId: string) => {
@@ -375,11 +451,60 @@ export default function SearchScreen() {
     );
   };
 
+  // Convert SearchPost to Post format for PostCard component
+  const convertSearchPostToPost = (searchPost: SearchPost): Post => {
+    return {
+      id: searchPost.id,
+      userId: {
+        _id: searchPost.userId._id,
+        name: searchPost.userId.name,
+        email: searchPost.userId.email,
+        picture: searchPost.userId.picture,
+      },
+      content: searchPost.content,
+      replySetting: searchPost.replySetting,
+      imageUrl: searchPost.imageUrl,
+      pollOptions: searchPost.pollOptions,
+      pollEndDate: searchPost.pollEndDate,
+      likes: searchPost.likes,
+      replies: searchPost.replies,
+      shares: searchPost.shares,
+      isLiked: searchPost.isLiked,
+      createdAt: searchPost.createdAt,
+      updatedAt: searchPost.updatedAt,
+    };
+  };
+
+  const handlePostLike = async (postId: string) => {
+    try {
+      await toggleLike(postId);
+      // Invalidate search queries to refetch
+      queryClient.invalidateQueries({ queryKey: ['searchPosts'] });
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  };
+
+  const handlePostComment = (postId: string) => {
+    // TODO: Navigate to post detail or comment screen
+    console.log('Comment on post:', postId);
+  };
+
+  const handlePostShare = (postId: string) => {
+    // TODO: Implement share functionality
+    console.log('Share post:', postId);
+  };
+
+  const handlePostMenuPress = (postId: string) => {
+    // Options drawer will be handled by PostCard component
+    console.log('Menu pressed for post:', postId);
+  };
+
   const renderPostTab = () => {
     if (!hasSearchQuery) {
       return (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>Enter a search query or hashtag to find posts</Text>
+          <Text style={styles.emptyStateText}>Enter a search keyword or hashtag to find posts</Text>
         </View>
       );
     }
@@ -402,67 +527,156 @@ export default function SearchScreen() {
             <Text style={styles.emptyStateText}>No posts found</Text>
           </View>
         ) : (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Search Results</Text>
-            {postResults.map((post) => (
-              <TouchableOpacity
-                key={post.id}
-                style={styles.postItem}
-                onPress={() => {
-                  // TODO: Navigate to post detail or handle post press
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={styles.postHeader}>
-                  <View style={styles.profileImageContainer}>
-                    {post.userId.picture ? (
-                      <Image
-                        source={{ uri: post.userId.picture }}
-                        style={styles.profileImage}
-                      />
-                    ) : (
-                      <View style={styles.profileImagePlaceholder}>
-                        <Text style={styles.profileImageText}>
-                          {getInitials(post.userId.name)}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.postUserInfo}>
-                    <Text style={styles.postUserName}>{post.userId.name}</Text>
-                    <Text style={styles.postDate}>
-                      {new Date(post.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.postContent}>{post.content}</Text>
-                <View style={styles.postStats}>
-                  <View style={styles.postStatItem}>
-                    <Ionicons name="heart" size={16} color={post.isLiked ? "#7436D7" : "#4E4C57"} />
-                    <Text style={styles.postStatText}>{post.likes}</Text>
-                  </View>
-                  <View style={styles.postStatItem}>
-                    <Ionicons name="chatbubble-outline" size={16} color="#4E4C57" />
-                    <Text style={styles.postStatText}>{post.replies}</Text>
-                  </View>
-                  <View style={styles.postStatItem}>
-                    <Ionicons name="share-outline" size={16} color="#4E4C57" />
-                    <Text style={styles.postStatText}>{post.shares}</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.postsContainer}>
+            {postResults.map((searchPost) => {
+              const post = convertSearchPostToPost(searchPost);
+              return (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  onLike={handlePostLike}
+                  onComment={handlePostComment}
+                  onShare={handlePostShare}
+                  onMenuPress={handlePostMenuPress}
+                  isLiked={post.isLiked}
+                />
+              );
+            })}
           </View>
         )}
       </ScrollView>
     );
   };
 
+  // Helper function to format date
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'long', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
+  // Helper function to format time range
+  const formatTimeRange = (startDateTime: string, endDateTime: string): string => {
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    
+    const startTime = start.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+    const endTime = end.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+    
+    return `${startTime} – ${endTime}`;
+  };
+
+  // Map backend event to frontend EventType
+  const mapEventToEventType = (event: SearchEvent): EventType => {
+    return {
+      id: event.id,
+      title: event.eventName,
+      host: event.hostBy,
+      date: formatDate(event.startDateTime),
+      time: formatTimeRange(event.startDateTime, event.endDateTime),
+      location: event.eventMode === 'Offline' ? event.location : undefined,
+      imageUri: event.thumbnailUri,
+      joinedCount: event.attendees,
+      isOnline: event.eventMode === 'Online',
+      isPublic: event.eventType === 'Public',
+      isJoined: event.isJoined || false,
+    };
+  };
+
+  const handleEventJoin = (eventId: string) => {
+    console.log('Join event:', eventId);
+  };
+
+  const handleEventShare = (eventId: string) => {
+    console.log('Share event:', eventId);
+  };
+
+  const handleEventSave = (eventId: string) => {
+    console.log('Save event:', eventId);
+  };
+
   const renderEventsTab = () => {
+    if (!hasSearchQuery) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>Enter a search keyword to find events</Text>
+        </View>
+      );
+    }
+
     return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>Events search coming soon</Text>
-      </View>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Category Filters */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryContainer}
+        >
+          {categories.map((category) => (
+            <TouchableOpacity
+              key={category}
+              style={[
+                styles.categoryButton,
+                selectedCategory === category && styles.categoryButtonActive,
+              ]}
+              onPress={() => setSelectedCategory(category)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.categoryButtonText,
+                  selectedCategory === category && styles.categoryButtonTextActive,
+                ]}
+              >
+                {category}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+        
+        {isLoadingEvents ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#7436D7" />
+            <Text style={styles.loadingText}>Searching events...</Text>
+          </View>
+        ) : eventResults.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No events found</Text>
+          </View>
+        ) : (
+          <View style={styles.eventsList}>
+            {eventResults.map((event) => {
+              const mappedEvent = mapEventToEventType(event);
+              return (
+                <Event
+                  key={event.id}
+                  event={mappedEvent}
+                  onJoin={handleEventJoin}
+                  onShare={handleEventShare}
+                  onSave={handleEventSave}
+                />
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     );
   };
 
@@ -889,6 +1103,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4E4C57',
     fontFamily: 'Montserrat_400Regular',
+  },
+  postsContainer: {
+    paddingVertical: 8,
+  },
+  categoryContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    gap: 12,
+  },
+  categoryButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  categoryButtonActive: {
+    backgroundColor: '#E8D5FF',
+    borderColor: '#E8D5FF',
+  },
+  categoryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#4E4C57',
+    fontFamily: 'Montserrat_500Medium',
+  },
+  categoryButtonTextActive: {
+    color: '#0D0A1B',
+    fontWeight: '600',
+    fontFamily: 'Montserrat_600SemiBold',
+  },
+  eventsList: {
+    paddingTop: 8,
   },
 });
 
