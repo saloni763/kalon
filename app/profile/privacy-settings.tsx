@@ -1,22 +1,90 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Switch, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
-
-type ProfileVisibilityOption = 'everyone' | 'followers' | 'onlyMe';
-type MessageOption = 'everyone' | 'followers' | 'noOne';
+import { usePrivacySettings, useUpdatePrivacySettings } from '@/hooks/queries/usePrivacySettings';
+import type { ProfileVisibilityOption, MessageOption } from '@/services/privacySettingsService';
 
 export default function PrivacySettingsScreen() {
+  // React Query hooks
+  const { data, isLoading, error } = usePrivacySettings();
+  const updateMutation = useUpdatePrivacySettings();
+
+  // Local state synced with query data
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibilityOption>('everyone');
   const [whoCanMessage, setWhoCanMessage] = useState<MessageOption>('everyone');
   const [locationSharing, setLocationSharing] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState(false);
 
+  // Sync local state with query data when it loads
+  useEffect(() => {
+    if (data?.privacySettings) {
+      setProfileVisibility(data.privacySettings.profileVisibility);
+      setWhoCanMessage(data.privacySettings.whoCanMessage);
+      setLocationSharing(data.privacySettings.locationSharing);
+      setOnlineStatus(data.privacySettings.onlineStatus);
+    }
+  }, [data]);
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to load privacy settings',
+        [{ text: 'OK' }]
+      );
+    }
+  }, [error]);
+
+  // Handle update errors
+  useEffect(() => {
+    if (updateMutation.isError) {
+      Alert.alert(
+        'Update Failed',
+        updateMutation.error instanceof Error
+          ? updateMutation.error.message
+          : 'Failed to update privacy settings',
+        [{ text: 'OK' }]
+      );
+    }
+  }, [updateMutation.isError, updateMutation.error]);
+
+  // Update function with debouncing for better UX
+  const updateSetting = (updates: {
+    profileVisibility?: ProfileVisibilityOption;
+    whoCanMessage?: MessageOption;
+    locationSharing?: boolean;
+    onlineStatus?: boolean;
+  }) => {
+    updateMutation.mutate(updates);
+  };
+
   const handleBlockedUsers = () => {
     // TODO: Navigate to blocked users screen
     console.log('Navigate to blocked users');
+  };
+
+  const handleProfileVisibilityChange = (value: ProfileVisibilityOption) => {
+    setProfileVisibility(value);
+    updateSetting({ profileVisibility: value });
+  };
+
+  const handleWhoCanMessageChange = (value: MessageOption) => {
+    setWhoCanMessage(value);
+    updateSetting({ whoCanMessage: value });
+  };
+
+  const handleLocationSharingChange = (value: boolean) => {
+    setLocationSharing(value);
+    updateSetting({ locationSharing: value });
+  };
+
+  const handleOnlineStatusChange = (value: boolean) => {
+    setOnlineStatus(value);
+    updateSetting({ onlineStatus: value });
   };
 
   const RadioButton = ({ 
@@ -37,6 +105,28 @@ export default function PrivacySettingsScreen() {
     </TouchableOpacity>
   );
 
+  // Show loading indicator while fetching initial data
+  if (isLoading && !data) {
+    return (
+      <View style={styles.container}>
+        <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity onPress={() => router.back()}>
+                <BackArrowCircleIcon width={26} height={26} color="#0D0A1B" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Privacy</Text>
+            </View>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#AF7DFF" />
+            <Text style={styles.loadingText}>Loading privacy settings...</Text>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
@@ -47,6 +137,9 @@ export default function PrivacySettingsScreen() {
               <BackArrowCircleIcon width={26} height={26} color="#0D0A1B" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Privacy</Text>
+            {updateMutation.isPending && (
+              <ActivityIndicator size="small" color="#AF7DFF" style={styles.headerLoader} />
+            )}
           </View>
         </View>
 
@@ -61,35 +154,38 @@ export default function PrivacySettingsScreen() {
             <View style={styles.optionsContainer}>
               <TouchableOpacity
                 style={styles.optionRow}
-                onPress={() => setProfileVisibility('everyone')}
+                onPress={() => handleProfileVisibilityChange('everyone')}
                 activeOpacity={0.7}
+                disabled={updateMutation.isPending}
               >
                 <Text style={styles.optionText}>Everyone</Text>
                 <RadioButton
                   selected={profileVisibility === 'everyone'}
-                  onPress={() => setProfileVisibility('everyone')}
+                  onPress={() => handleProfileVisibilityChange('everyone')}
                 />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.optionRow}
-                onPress={() => setProfileVisibility('followers')}
+                onPress={() => handleProfileVisibilityChange('followers')}
                 activeOpacity={0.7}
+                disabled={updateMutation.isPending}
               >
                 <Text style={styles.optionText}>Followers only</Text>
                 <RadioButton
                   selected={profileVisibility === 'followers'}
-                  onPress={() => setProfileVisibility('followers')}
+                  onPress={() => handleProfileVisibilityChange('followers')}
                 />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.optionRow}
-                onPress={() => setProfileVisibility('onlyMe')}
+                onPress={() => handleProfileVisibilityChange('onlyMe')}
                 activeOpacity={0.7}
+                disabled={updateMutation.isPending}
               >
                 <Text style={styles.optionText}>Only me</Text>
                 <RadioButton
                   selected={profileVisibility === 'onlyMe'}
-                  onPress={() => setProfileVisibility('onlyMe')}
+                  onPress={() => handleProfileVisibilityChange('onlyMe')}
                 />
               </TouchableOpacity>
             </View>
@@ -104,35 +200,38 @@ export default function PrivacySettingsScreen() {
             <View style={styles.optionsContainer}>
               <TouchableOpacity
                 style={styles.optionRow}
-                onPress={() => setWhoCanMessage('everyone')}
+                onPress={() => handleWhoCanMessageChange('everyone')}
                 activeOpacity={0.7}
+                disabled={updateMutation.isPending}
               >
                 <Text style={styles.optionText}>Everyone</Text>
                 <RadioButton
                   selected={whoCanMessage === 'everyone'}
-                  onPress={() => setWhoCanMessage('everyone')}
+                  onPress={() => handleWhoCanMessageChange('everyone')}
                 />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.optionRow}
-                onPress={() => setWhoCanMessage('followers')}
+                onPress={() => handleWhoCanMessageChange('followers')}
                 activeOpacity={0.7}
+                disabled={updateMutation.isPending}
               >
                 <Text style={styles.optionText}>Followers only</Text>
                 <RadioButton
                   selected={whoCanMessage === 'followers'}
-                  onPress={() => setWhoCanMessage('followers')}
+                  onPress={() => handleWhoCanMessageChange('followers')}
                 />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.optionRow}
-                onPress={() => setWhoCanMessage('noOne')}
+                onPress={() => handleWhoCanMessageChange('noOne')}
                 activeOpacity={0.7}
+                disabled={updateMutation.isPending}
               >
                 <Text style={styles.optionText}>No One</Text>
                 <RadioButton
                   selected={whoCanMessage === 'noOne'}
-                  onPress={() => setWhoCanMessage('noOne')}
+                  onPress={() => handleWhoCanMessageChange('noOne')}
                 />
               </TouchableOpacity>
             </View>
@@ -166,10 +265,11 @@ export default function PrivacySettingsScreen() {
               <Text style={styles.settingText}>Allow Location</Text>
               <Switch
                 value={locationSharing}
-                onValueChange={setLocationSharing}
+                onValueChange={handleLocationSharingChange}
                 trackColor={{ false: '#E0E0E0', true: '#AF7DFF' }}
                 thumbColor="#FFFFFF"
                 ios_backgroundColor="#E0E0E0"
+                disabled={updateMutation.isPending}
               />
             </View>
           </View>
@@ -184,10 +284,11 @@ export default function PrivacySettingsScreen() {
               <Text style={styles.settingText}>Online</Text>
               <Switch
                 value={onlineStatus}
-                onValueChange={setOnlineStatus}
+                onValueChange={handleOnlineStatusChange}
                 trackColor={{ false: '#E0E0E0', true: '#AF7DFF' }}
                 thumbColor="#FFFFFF"
                 ios_backgroundColor="#E0E0E0"
+                disabled={updateMutation.isPending}
               />
             </View>
           </View>
@@ -317,6 +418,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#0D0A1B',
     fontFamily: 'Montserrat_400Regular',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#4E4C57',
+    fontFamily: 'Montserrat_400Regular',
+  },
+  headerLoader: {
+    marginLeft: 8,
   },
 });
 
