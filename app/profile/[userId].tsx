@@ -4,10 +4,10 @@ import { useState, useMemo } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { usePosts, useToggleLike } from '@/hooks/queries/usePosts';
+import { usePosts, useToggleLike, useToggleSavePost } from '@/hooks/queries/usePosts';
 import Post from '@/components/Post-card';
 import { showToast } from '@/utils/toast';
-import { Post as PostType } from '@/services/postService';
+import { Post as PostType, ToggleSavePostResponse } from '@/services/postService';
 import { User, EducationEntry, RoleEntry } from '@/services/authService';
 import * as Clipboard from 'expo-clipboard';
 import { uploadImage } from '@/services/uploadService';
@@ -15,10 +15,10 @@ import VerifiedBadge from '@/components/ui/VerifiedBadge';
 import ShareProfileIcon from '@/components/ui/ShareProfileIcon';
 import EditProfileIcon from '@/components/ui/EditProfileIcon';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
-import { useUser, useUserById, useFollowUser, useUnfollowUser, useUpdatePersonalInfo } from '@/hooks/queries/useAuth';
+import { useUser, useUserById, useFollowUser, useUnfollowUser, useUpdatePersonalInfo, useBlockUser } from '@/hooks/queries/useAuth';
 import NotificationIcon from '@/components/ui/NotificationIcon';
 import CalendarIcon from '@/assets/icons/calendar.svg';
-import { useEvents } from '@/hooks/queries/useEvents';
+import { useEvents, useToggleSaveEvent } from '@/hooks/queries/useEvents';
 import Event, { EventType } from '@/components/Event-card';
 import { Event as BackendEvent } from '@/services/eventService';
 import ShareIcon from '@/assets/icons/Share.svg';
@@ -85,9 +85,16 @@ export default function ProfileScreen() {
   // Like/unlike mutation
   const toggleLikeMutation = useToggleLike();
   
+  // Save/unsave mutations
+  const toggleSavePostMutation = useToggleSavePost();
+  const toggleSaveEventMutation = useToggleSaveEvent();
+  
   // Follow/unfollow mutations
   const followUserMutation = useFollowUser();
   const unfollowUserMutation = useUnfollowUser();
+  
+  // Block user mutation
+  const blockUserMutation = useBlockUser();
   
   // Update personal info mutation
   const updatePersonalInfoMutation = useUpdatePersonalInfo();
@@ -121,10 +128,20 @@ export default function ProfileScreen() {
   };
 
   const handleSave = (postId: string, post?: PostType) => {
-    showToast.saved(() => {
-      console.log('Navigate to saved posts');
+    toggleSavePostMutation.mutate(postId, {
+      onSuccess: (data: ToggleSavePostResponse) => {
+        if (data.isSaved) {
+          showToast.saved(() => {
+            router.push('/profile/saved');
+          });
+        } else {
+          showToast.info('Removed from saved');
+        }
+      },
+      onError: (error: any) => {
+        showToast.error(error.message || 'Failed to save post');
+      },
     });
-    console.log('Save post:', postId);
   };
 
   const handleNotInterested = (postId: string) => {
@@ -255,6 +272,7 @@ export default function ProfileScreen() {
       isOnline: event.eventMode === 'Online',
       isPublic: event.eventType === 'Public',
       isJoined: event.isJoined || false,
+      isSaved: event.isSaved || false,
     };
   };
 
@@ -273,7 +291,20 @@ export default function ProfileScreen() {
   };
 
   const handleEventSave = (eventId: string) => {
-    console.log('Save event:', eventId);
+    toggleSaveEventMutation.mutate(eventId, {
+      onSuccess: (data) => {
+        if (data.isSaved) {
+          showToast.saved(() => {
+            router.push('/profile/saved');
+          });
+        } else {
+          showToast.info('Removed from saved');
+        }
+      },
+      onError: (error: any) => {
+        showToast.error(error.message || 'Failed to save event');
+      },
+    });
   };
 
   // Show loading state while fetching user data
@@ -445,7 +476,37 @@ export default function ProfileScreen() {
       id: 'block',
       icon: <BlockIcon />,
       text: 'Block',
-      onPress: () => showToast.error('User blocked'),
+      onPress: () => {
+        if (!userId || !userData) return;
+        
+        Alert.alert(
+          'Block User',
+          `Are you sure you want to block ${userData.name}? You won't be able to see their posts or interact with them.`,
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+            {
+              text: 'Block',
+              style: 'destructive',
+              onPress: () => {
+                blockUserMutation.mutate(userId, {
+                  onSuccess: () => {
+                    showToast.success('User blocked successfully');
+                    setShowOptionsDrawer(false);
+                    // Navigate back or refresh
+                    refetchUser();
+                  },
+                  onError: (error: any) => {
+                    showToast.error(error.message || 'Failed to block user');
+                  },
+                });
+              },
+            },
+          ]
+        );
+      },
       isDanger: true,
     },
     {
@@ -816,6 +877,7 @@ export default function ProfileScreen() {
                       key={post.id}
                       post={post}
                       isLiked={post.isLiked || false}
+                      isSaved={post.isSaved || false}
                       onLike={toggleLike}
                       onComment={handleComment}
                       onShare={handleShare}
@@ -871,6 +933,7 @@ export default function ProfileScreen() {
                       <Event
                         key={event.id}
                         event={event}
+                        isSaved={event.isSaved}
                         onJoin={handleEventJoin}
                         onShare={handleEventShare}
                         onSave={handleEventSave}

@@ -5,8 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Post from '@/components/Post-card';
 import Event, { EventType } from '@/components/Event-card';
-import { usePosts, useToggleLike } from '@/hooks/queries/usePosts';
+import { useSavedPosts, useToggleLike, useToggleSavePost } from '@/hooks/queries/usePosts';
+import { useSavedEvents, useToggleSaveEvent } from '@/hooks/queries/useEvents';
 import { Post as PostType } from '@/services/postService';
+import { Event as BackendEvent } from '@/services/eventService';
 import { showToast } from '@/utils/toast';
 import * as Clipboard from 'expo-clipboard';
 import BackArrowCircleIcon from '@/components/ui/BackArrowCircleIcon';
@@ -15,108 +17,38 @@ type TabType = 'All' | 'Posts' | 'Events';
 
 export default function SavedScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('All');
-  const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
-  const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set());
 
-  // Mock saved events data - in a real app, this would come from an API
-  const mockSavedEvents: EventType[] = [
-    {
-      id: 'event-1',
-      title: 'Mind Matters: Mental Wellness Workshop',
-      host: 'Crimson Foundation',
-      date: 'August 10, 2023',
-      time: '9:30AM - 1:00PM',
-      imageUri: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800',
-      joinedCount: 80,
-      isOnline: true,
-      isPublic: true,
-      tag: 'FDRC',
-    },
-    {
-      id: 'event-2',
-      title: 'Mind Matters: Mental Wellness Workshop',
-      host: 'CalmCare Foundation',
-      date: 'August 16, 2028',
-      time: '9:30 AM - 1:00 PM',
-      imageUri: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800',
-      joinedCount: 456,
-      isOnline: true,
-      isPublic: true,
-      tag: 'Public',
-    },
-  ];
-
-  // Mock saved posts data - in a real app, this would come from an API
-  const mockSavedPosts: PostType[] = [
-    {
-      id: 'saved-post-1',
-      userId: {
-        _id: 'user-1',
-        name: 'Alice Horney',
-        email: 'horney01@example.com',
-        picture: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-      },
-      content: 'Big shoutout to @SarahW for hosting the best resume workshop today 🔥 Learned so much about LinkedIn game. #levelup #careergoals #studentlife #jobsearch',
-      replySetting: 'Anyone',
-      likes: 33300,
-      replies: 3800,
-      shares: 1200,
-      createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'saved-post-2',
-      userId: {
-        _id: 'user-2',
-        name: 'Teresa Geurmond',
-        email: 'tfordly@example.com',
-        picture: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-      },
-      content: '🌿 Quick Hack: Use Motion + Pomodoro = super focus mode. Trust me, it\'s a game changer. 🧠 #studyhacks #productivityhack',
-      replySetting: 'Anyone',
-      likes: 33300,
-      replies: 3800,
-      shares: 950,
-      createdAt: new Date(Date.now() - 60000).toISOString(), // 1 minute ago
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'saved-post-3',
-      userId: {
-        _id: 'user-3',
-        name: 'Michael Rodgers',
-        email: 'michael_r@example.com',
-        picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      },
-      content: 'Tried the new pizza spot near campus... 10/10 would recommend 🔥🍕 Anyone tried their pasta yet? #FoodOnCampus #LateNightEats',
-      replySetting: 'Anyone',
-      likes: 23500,
-      replies: 3500,
-      shares: 800,
-      createdAt: new Date(Date.now() - 1740000).toISOString(), // 29 minutes ago
-      updatedAt: new Date().toISOString(),
-    },
-  ];
-
-  // Fetch posts - in a real app, you'd filter for saved posts
+  // Fetch saved posts
   const { 
-    data, 
-    isLoading, 
-    error, 
-    refetch,
-    isRefetching 
-  } = usePosts({
+    data: savedPostsData, 
+    isLoading: isLoadingPosts, 
+    error: postsError, 
+    refetch: refetchPosts,
+    isRefetching: isRefetchingPosts 
+  } = useSavedPosts({
     page: 1,
     limit: 20,
   });
 
-  // Use mock saved posts for UI demonstration
-  // In production, this would filter actual saved posts from the API
-  const savedPostsData = mockSavedPosts;
+  // Fetch saved events
+  const { 
+    data: savedEventsData, 
+    isLoading: isLoadingEvents, 
+    error: eventsError, 
+    refetch: refetchEvents,
+    isRefetching: isRefetchingEvents 
+  } = useSavedEvents({
+    page: 1,
+    limit: 20,
+  });
+
+  const isLoading = isLoadingPosts || isLoadingEvents;
+  const isRefetching = isRefetchingPosts || isRefetchingEvents;
+  const error = postsError || eventsError;
 
   const handleRefresh = async () => {
     try {
-      await refetch();
+      await Promise.all([refetchPosts(), refetchEvents()]);
     } catch (error) {
       showToast.error('Failed to refresh');
     }
@@ -133,6 +65,10 @@ export default function SavedScreen() {
     });
   };
 
+  // Save/unsave mutations
+  const toggleSavePostMutation = useToggleSavePost();
+  const toggleSaveEventMutation = useToggleSaveEvent();
+
   const handleComment = (postId: string) => {
     console.log('Comment on post:', postId);
   };
@@ -146,18 +82,19 @@ export default function SavedScreen() {
   };
 
   const handleSave = (postId: string, post?: PostType) => {
-    setSavedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(postId)) {
-        newSet.delete(postId);
-        showToast.info('Removed from saved');
-      } else {
-        newSet.add(postId);
-        showToast.saved(() => {
-          router.push('/profile/saved');
-        });
-      }
-      return newSet;
+    toggleSavePostMutation.mutate(postId, {
+      onSuccess: (data) => {
+        if (data.isSaved) {
+          showToast.saved(() => {
+            router.push('/profile/saved');
+          });
+        } else {
+          showToast.info('Removed from saved');
+        }
+      },
+      onError: (error: any) => {
+        showToast.error(error.message || 'Failed to save post');
+      },
     });
   };
 
@@ -203,31 +140,34 @@ export default function SavedScreen() {
   };
 
   const handleEventSave = (eventId: string) => {
-    setSavedEvents(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(eventId)) {
-        newSet.delete(eventId);
-        showToast.info('Removed from saved');
-      } else {
-        newSet.add(eventId);
-        showToast.saved(() => {
-          router.push('/profile/saved');
-        });
-      }
-      return newSet;
+    toggleSaveEventMutation.mutate(eventId, {
+      onSuccess: (data) => {
+        if (data.isSaved) {
+          showToast.saved(() => {
+            router.push('/profile/saved');
+          });
+        } else {
+          showToast.info('Removed from saved');
+        }
+      },
+      onError: (error: any) => {
+        showToast.error(error.message || 'Failed to save event');
+      },
     });
   };
 
   // Determine what content to show based on active tab
-  // Always use mock data for UI demonstration
   const getContentToShow = () => {
+    const posts = savedPostsData?.posts || [];
+    const events = savedEventsData?.events || [];
+
     if (activeTab === 'Posts') {
-      return { posts: savedPostsData, events: [] };
+      return { posts, events: [] };
     } else if (activeTab === 'Events') {
-      return { posts: [], events: mockSavedEvents };
+      return { posts: [], events };
     } else {
       // All tab - show both
-      return { posts: savedPostsData, events: mockSavedEvents };
+      return { posts, events };
     }
   };
 
@@ -287,7 +227,20 @@ export default function SavedScreen() {
             />
           }
         >
-          {!hasContent ? (
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#AF7DFF" />
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>
+                {error instanceof Error ? error.message : 'Failed to load saved items'}
+              </Text>
+              <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : !hasContent ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="bookmark-outline" size={64} color="#E0E0E0" />
               <Text style={styles.emptyText}>No saved items yet</Text>
@@ -303,6 +256,7 @@ export default function SavedScreen() {
                   key={post.id}
                   post={post}
                   isLiked={post.isLiked || false}
+                  isSaved={post.isSaved || false}
                   onLike={toggleLike}
                   onComment={handleComment}
                   onShare={handleShare}
@@ -318,15 +272,32 @@ export default function SavedScreen() {
               ))}
 
               {/* Show Events */}
-              {events.map((event) => (
-                <Event
-                  key={event.id}
-                  event={event}
-                  onJoin={handleEventJoin}
-                  onShare={handleEventShare}
-                  onSave={handleEventSave}
-                />
-              ))}
+              {events.map((event) => {
+                // Convert Event type to EventType for Event component
+                const eventCardData: EventType = {
+                  id: event.id,
+                  title: event.eventName,
+                  host: event.hostBy,
+                  date: new Date(event.startDateTime).toLocaleDateString(),
+                  time: `${new Date(event.startDateTime).toLocaleTimeString()} - ${new Date(event.endDateTime).toLocaleTimeString()}`,
+                  imageUri: event.thumbnailUri || undefined,
+                  joinedCount: event.attendees,
+                  isOnline: event.eventMode === 'Online',
+                  isPublic: event.eventType === 'Public',
+                  tag: event.category,
+                  isSaved: event.isSaved || false,
+                };
+                return (
+                  <Event
+                    key={event.id}
+                    event={eventCardData}
+                    isSaved={event.isSaved}
+                    onJoin={handleEventJoin}
+                    onShare={handleEventShare}
+                    onSave={handleEventSave}
+                  />
+                );
+              })}
             </>
           )}
         </ScrollView>
@@ -435,6 +406,19 @@ const styles = StyleSheet.create({
     color: '#4E4C57',
     textAlign: 'center',
     fontFamily: 'Montserrat_400Regular',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#AF7DFF',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Montserrat_600SemiBold',
   },
 });
 

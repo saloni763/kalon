@@ -4,12 +4,15 @@ import {
   listPosts,
   toggleLike,
   deletePost,
+  toggleSavePost,
+  getSavedPosts,
   CreatePostData, 
   CreatePostResponse,
   ListPostsParams,
   ListPostsResponse,
   ToggleLikeResponse,
-  DeletePostResponse
+  DeletePostResponse,
+  ToggleSavePostResponse
 } from '@/services/postService';
 
 // Query keys - centralized and type-safe
@@ -25,6 +28,13 @@ export const postKeys = {
       userId: filters.userId,
     } : {};
     return [...postKeys.lists(), normalizedFilters] as const;
+  },
+  saved: (filters?: ListPostsParams) => {
+    const normalizedFilters = filters ? {
+      page: filters.page || 1,
+      limit: filters.limit || 10,
+    } : {};
+    return [...postKeys.all, 'saved', normalizedFilters] as const;
   },
   details: () => [...postKeys.all, 'detail'] as const,
   detail: (id: string) => [...postKeys.details(), id] as const,
@@ -276,3 +286,144 @@ export const useDeletePost = () => {
   });
 };
 
+// Get saved posts query
+export const useSavedPosts = (params?: ListPostsParams) => {
+  return useQuery({
+    queryKey: postKeys.saved(params),
+    queryFn: () => getSavedPosts(params),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: true,
+    placeholderData: (previousData) => previousData,
+  });
+};
+
+// Toggle save post mutation
+export const useToggleSavePost = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (postId: string) => toggleSavePost(postId),
+    // Optimistic update: Update UI immediately before server responds
+    onMutate: async (postId) => {
+      // Cancel outgoing queries to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: postKeys.lists() });
+      await queryClient.cancelQueries({ queryKey: postKeys.saved() });
+      await queryClient.cancelQueries({ queryKey: postKeys.detail(postId) });
+
+      // Snapshot previous values for rollback
+      const previousPostsLists = queryClient.getQueriesData<ListPostsResponse>({
+        queryKey: postKeys.lists(),
+      });
+      const previousSavedPosts = queryClient.getQueriesData<ListPostsResponse>({
+        queryKey: postKeys.saved(),
+      });
+      const previousPostDetail = queryClient.getQueryData(
+        postKeys.detail(postId)
+      );
+
+      // Optimistically update all post lists
+      queryClient.setQueriesData<ListPostsResponse>(
+        { queryKey: postKeys.lists() },
+        (oldData) => {
+          if (!oldData) return oldData;
+
+          return {
+            ...oldData,
+            posts: oldData.posts.map((post) => {
+              if (post.id === postId) {
+                return {
+                  ...post,
+                  isSaved: !post.isSaved,
+                };
+              }
+              return post;
+            }),
+          };
+        }
+      );
+
+      // Optimistically update saved posts list
+      queryClient.setQueriesData<ListPostsResponse>(
+        { queryKey: postKeys.saved() },
+        (oldData) => {
+          if (!oldData) return oldData;
+
+          const post = oldData.posts.find((p) => p.id === postId);
+          if (post) {
+            // Remove from saved if currently saved
+            return {
+              ...oldData,
+              posts: oldData.posts.filter((p) => p.id !== postId),
+              pagination: {
+                ...oldData.pagination,
+                totalPosts: Math.max(0, oldData.pagination.totalPosts - 1),
+              },
+            };
+          }
+          return oldData;
+        }
+      );
+
+      // Optimistically update individual post if cached
+      queryClient.setQueryData(postKeys.detail(postId), (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          isSaved: !oldData.isSaved,
+        };
+      });
+
+      return { previousPostsLists, previousSavedPosts, previousPostDetail };
+    },
+    onSuccess: (data, postId) => {
+      // Update with server response (ensures consistency)
+      queryClient.setQueriesData<ListPostsResponse>(
+        { queryKey: postKeys.lists() },
+        (oldData) => {
+          if (!oldData) return oldData;
+
+          return {
+            ...oldData,
+            posts: oldData.posts.map((post) =>
+              post.id === postId
+                ? { ...post, isSaved: data.isSaved }
+                : post
+            ),
+          };
+        }
+      );
+
+      // Update individual post cache
+      queryClient.setQueryData(postKeys.detail(postId), (oldData: any) => {
+        if (!oldData) return oldData;
+        return { ...oldData, isSaved: data.isSaved };
+      });
+
+      // Invalidate saved posts to refetch if needed
+      queryClient.invalidateQueries({ queryKey: postKeys.saved() });
+    },
+    onError: (error, postId, context) => {
+      // Rollback optimistic update on error
+      if (context?.previousPostsLists) {
+        context.previousPostsLists.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      if (context?.previousSavedPosts) {
+        context.previousSavedPosts.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      if (context?.previousPostDetail) {
+        queryClient.setQueryData(postKeys.detail(postId), context.previousPostDetail);
+      }
+      console.error('Toggle save post error:', error);
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure consistency
+      queryClient.invalidateQueries({ queryKey: postKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: postKeys.saved() });
+    },
+  });
+};

@@ -43,11 +43,16 @@ export const API_ROUTES = {
     GET_FOLLOWING: (userId: string) => `/api/auth/user/${userId}/following`,
     GET_PRIVACY_SETTINGS: '/api/auth/privacy-settings',
     UPDATE_PRIVACY_SETTINGS: '/api/auth/privacy-settings',
+    GET_BLOCKED_USERS: '/api/auth/blocked-users',
+    BLOCK_USER: (userId: string) => `/api/auth/user/${userId}/block`,
+    UNBLOCK_USER: (userId: string) => `/api/auth/user/${userId}/unblock`,
   },
   POSTS: {
     CREATE: '/api/posts/create',
     LIST: '/api/posts',
     LIKE: (postId: string) => `/api/posts/${postId}/like`,
+    SAVE: (postId: string) => `/api/posts/${postId}/save`,
+    SAVED: '/api/posts/saved',
     DELETE: (postId: string) => `/api/posts/${postId}`,
   },
   SEARCH: {
@@ -59,6 +64,8 @@ export const API_ROUTES = {
     CREATE: '/api/events/create',
     LIST: '/api/events',
     GET_BY_ID: (eventId: string) => `/api/events/${eventId}`,
+    SAVE: (eventId: string) => `/api/events/${eventId}/save`,
+    SAVED: '/api/events/saved',
   },
   UPLOAD: {
     IMAGE: '/api/upload/image',

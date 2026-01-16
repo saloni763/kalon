@@ -1,9 +1,10 @@
 import { StyleSheet, View, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
+import { router } from 'expo-router';
 import Header from '@/components/Header';
 import Post from '@/components/Post-card';
-import { usePosts, useToggleLike } from '@/hooks/queries/usePosts';
+import { usePosts, useToggleLike, useToggleSavePost } from '@/hooks/queries/usePosts';
 import { useUser } from '@/hooks/queries/useAuth';
 import { showToast } from '@/utils/toast';
 
@@ -29,6 +30,9 @@ export default function HomeScreen() {
 
   // Like/unlike mutation
   const toggleLikeMutation = useToggleLike();
+  
+  // Save/unsave mutation
+  const toggleSavePostMutation = useToggleSavePost();
 
   // Best practice: Use isRefetching from React Query instead of manual state
   const handleRefresh = async () => {
@@ -65,12 +69,20 @@ export default function HomeScreen() {
   };
 
   const handleSave = (postId: string, post?: PostType) => {
-    // TODO: Implement save post functionality
-    showToast.saved(() => {
-      // Navigate to saved posts screen
-      console.log('Navigate to saved posts');
+    toggleSavePostMutation.mutate(postId, {
+      onSuccess: (data) => {
+        if (data.isSaved) {
+          showToast.saved(() => {
+            router.push('/profile/saved');
+          });
+        } else {
+          showToast.info('Removed from saved');
+        }
+      },
+      onError: (error: any) => {
+        showToast.error(error.message || 'Failed to save post');
+      },
     });
-    console.log('Save post:', postId);
   };
 
   const handleNotInterested = (postId: string) => {
@@ -159,6 +171,7 @@ export default function HomeScreen() {
                 key={post.id}
                 post={post}
                 isLiked={post.isLiked || false}
+                isSaved={post.isSaved || false}
                 onLike={toggleLike}
                 onComment={handleComment}
                 onShare={handleShare}
