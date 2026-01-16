@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -18,6 +18,7 @@ export interface EventType {
   isPublic: boolean;
   tag?: string;
   isJoined?: boolean;
+  isSaved?: boolean;
 }
 
 interface EventProps {
@@ -25,6 +26,7 @@ interface EventProps {
   onJoin?: (eventId: string) => void;
   onShare?: (eventId: string) => void;
   onSave?: (eventId: string) => void;
+  isSaved?: boolean;
 }
 
 export default function Event({
@@ -32,10 +34,21 @@ export default function Event({
   onJoin,
   onShare,
   onSave,
+  isSaved: isSavedProp = false,
 }: EventProps) {
   const router = useRouter();
   const [isJoined, setIsJoined] = useState(event.isJoined || false);
-  const [isSaved, setIsSaved] = useState(false);
+  const [isSaved, setIsSaved] = useState(isSavedProp || event.isSaved || false);
+
+  // Sync joined state with prop changes
+  useEffect(() => {
+    setIsJoined(event.isJoined || false);
+  }, [event.isJoined]);
+
+  // Sync saved state with prop changes
+  useEffect(() => {
+    setIsSaved(isSavedProp || event.isSaved || false);
+  }, [isSavedProp, event.isSaved]);
 
   const handleJoin = () => {
     setIsJoined(!isJoined);

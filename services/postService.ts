@@ -27,6 +27,7 @@ export interface Post {
   replies: number;
   shares: number;
   isLiked?: boolean;
+  isSaved?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -123,6 +124,42 @@ export const deletePost = async (postId: string): Promise<DeletePostResponse> =>
     return response.data;
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message || 'Failed to delete post';
+    throw new Error(errorMessage);
+  }
+};
+
+// Toggle save post API call
+export interface ToggleSavePostResponse {
+  message: string;
+  isSaved: boolean;
+}
+
+export const toggleSavePost = async (postId: string): Promise<ToggleSavePostResponse> => {
+  try {
+    const response = await api.post<ToggleSavePostResponse>(
+      API_ROUTES.POSTS.SAVE(postId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to toggle save post';
+    throw new Error(errorMessage);
+  }
+};
+
+// Get saved posts API call
+export const getSavedPosts = async (params?: ListPostsParams): Promise<ListPostsResponse> => {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    const queryString = queryParams.toString();
+    const url = queryString ? `${API_ROUTES.POSTS.SAVED}?${queryString}` : API_ROUTES.POSTS.SAVED;
+
+    const response = await api.get<ListPostsResponse>(url);
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch saved posts';
     throw new Error(errorMessage);
   }
 };

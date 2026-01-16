@@ -37,6 +37,7 @@ export interface Event {
   thumbnailUri?: string;
   attendees: number;
   isJoined?: boolean;
+  isSaved?: boolean;
   invitedUsers?: Array<{
     _id: string;
     name: string;
@@ -130,6 +131,42 @@ export const getEventById = async (eventId: string): Promise<GetEventResponse> =
     return response.data;
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch event';
+    throw new Error(errorMessage);
+  }
+};
+
+// Toggle save event API call
+export interface ToggleSaveEventResponse {
+  message: string;
+  isSaved: boolean;
+}
+
+export const toggleSaveEvent = async (eventId: string): Promise<ToggleSaveEventResponse> => {
+  try {
+    const response = await api.post<ToggleSaveEventResponse>(
+      API_ROUTES.EVENTS.SAVE(eventId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to toggle save event';
+    throw new Error(errorMessage);
+  }
+};
+
+// Get saved events API call
+export const getSavedEvents = async (params?: ListEventsParams): Promise<ListEventsResponse> => {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+    const queryString = queryParams.toString();
+    const url = queryString ? `${API_ROUTES.EVENTS.SAVED}?${queryString}` : API_ROUTES.EVENTS.SAVED;
+
+    const response = await api.get<ListEventsResponse>(url);
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch saved events';
     throw new Error(errorMessage);
   }
 };

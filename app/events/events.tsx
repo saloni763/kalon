@@ -8,7 +8,7 @@ import SearchIcon from '@/components/ui/SearchIcon';
 import BackArrowIcon from '@/components/BackArrowIcon';
 import Event, { EventType } from '@/components/Event-card';
 import { EventFilters } from './filter';
-import { useEvents } from '@/hooks/queries/useEvents';
+import { useEvents, useToggleSaveEvent } from '@/hooks/queries/useEvents';
 import { Event as BackendEvent } from '@/services/eventService';
 import { useUser } from '@/hooks/queries/useAuth';
 import { showToast } from '@/utils/toast';
@@ -60,6 +60,7 @@ const mapEventToEventType = (event: BackendEvent, currentUserId?: string): Event
     isOnline: event.eventMode === 'Online',
     isPublic: event.eventType === 'Public',
     isJoined: event.isJoined || false,
+    isSaved: event.isSaved || false,
   };
 };
 
@@ -199,8 +200,24 @@ export default function EventsScreen() {
     console.log('Share event:', eventId);
   };
 
+  // Save/unsave event mutation
+  const toggleSaveEventMutation = useToggleSaveEvent();
+
   const handleSave = (eventId: string) => {
-    console.log('Save event:', eventId);
+    toggleSaveEventMutation.mutate(eventId, {
+      onSuccess: (data) => {
+        if (data.isSaved) {
+          showToast.saved(() => {
+            router.push('/profile/saved');
+          });
+        } else {
+          showToast.info('Removed from saved');
+        }
+      },
+      onError: (error: any) => {
+        showToast.error(error.message || 'Failed to save event');
+      },
+    });
   };
 
   const handleExploreAll = () => {
@@ -334,6 +351,7 @@ export default function EventsScreen() {
                     <Event
                       key={event.id}
                       event={event}
+                      isSaved={event.isSaved}
                       onJoin={handleJoin}
                       onShare={handleShare}
                       onSave={handleSave}
@@ -432,6 +450,7 @@ export default function EventsScreen() {
                     <Event
                       key={event.id}
                       event={event}
+                      isSaved={event.isSaved}
                       onJoin={handleJoin}
                       onShare={handleShare}
                       onSave={handleSave}
@@ -513,6 +532,7 @@ export default function EventsScreen() {
                       <Event
                         key={event.id}
                         event={event}
+                        isSaved={event.isSaved}
                         onJoin={handleJoin}
                         onShare={handleShare}
                         onSave={handleSave}

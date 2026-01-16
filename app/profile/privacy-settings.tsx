@@ -63,8 +63,7 @@ export default function PrivacySettingsScreen() {
   };
 
   const handleBlockedUsers = () => {
-    // TODO: Navigate to blocked users screen
-    console.log('Navigate to blocked users');
+    router.push('/profile/blocked-users' as any);
   };
 
   const handleProfileVisibilityChange = (value: ProfileVisibilityOption) => {

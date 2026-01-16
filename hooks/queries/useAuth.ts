@@ -13,6 +13,9 @@ import {
   unfollowUser,
   getFollowers,
   getFollowing,
+  blockUser,
+  unblockUser,
+  getBlockedUsers,
   SignupData, 
   LoginData, 
   UpdatePersonalInfoData, 
@@ -29,11 +32,15 @@ import {
   UnfollowUserResponse,
   GetFollowersResponse,
   GetFollowingResponse,
+  BlockUserResponse,
+  UnblockUserResponse,
+  GetBlockedUsersResponse,
   User
 } from '@/services/authService';
 import { saveToken, saveUser, removeToken } from '@/utils/tokenStorage';
 import { googleLogin, GoogleLoginData, logout as logoutApi } from '@/services/authService';
 import { signInWithGoogle } from '@/services/googleAuthService';
+import { privacySettingsKeys } from './usePrivacySettings';
 
 // Query keys - centralized and type-safe
 export const authKeys = {
@@ -43,6 +50,7 @@ export const authKeys = {
   sessions: () => [...authKeys.all, 'sessions'] as const,
   followers: (userId: string) => [...authKeys.all, 'followers', userId] as const,
   following: (userId: string) => [...authKeys.all, 'following', userId] as const,
+  blockedUsers: () => [...authKeys.all, 'blockedUsers'] as const,
 };
 
 // Signup mutation
@@ -494,6 +502,87 @@ export const useGoogleLogin = () => {
     onError: (error) => {
       console.error('Google login error:', error);
     },
+  });
+};
+
+// Block user mutation
+export const useBlockUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => blockUser(userId),
+    onSuccess: (data, userId) => {
+      // Update privacy settings cache with new blocked users list
+      queryClient.setQueryData(
+        privacySettingsKeys.settings(),
+        (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            blockedUsers: data.blockedUsers,
+          };
+        }
+      );
+
+      // Invalidate blocked users list to refresh
+      queryClient.invalidateQueries({ queryKey: authKeys.blockedUsers() });
+
+      // Invalidate user queries to refresh data
+      queryClient.invalidateQueries({ queryKey: authKeys.userById(userId) });
+      queryClient.invalidateQueries({ queryKey: authKeys.user() });
+      queryClient.invalidateQueries({ queryKey: authKeys.followers(userId) });
+      queryClient.invalidateQueries({ queryKey: authKeys.following(userId) });
+    },
+    onError: (error) => {
+      console.error('Block user error:', error);
+    },
+  });
+};
+
+// Unblock user mutation
+export const useUnblockUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => unblockUser(userId),
+    onSuccess: (data, userId) => {
+      // Update privacy settings cache with updated blocked users list
+      queryClient.setQueryData(
+        privacySettingsKeys.settings(),
+        (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            blockedUsers: data.blockedUsers,
+          };
+        }
+      );
+
+      // Invalidate blocked users list to refresh
+      queryClient.invalidateQueries({ queryKey: authKeys.blockedUsers() });
+
+      // Invalidate user queries to refresh data
+      queryClient.invalidateQueries({ queryKey: authKeys.userById(userId) });
+      queryClient.invalidateQueries({ queryKey: authKeys.user() });
+    },
+    onError: (error) => {
+      console.error('Unblock user error:', error);
+    },
+  });
+};
+
+// Get blocked users query
+export const useBlockedUsers = () => {
+  return useQuery({
+    queryKey: authKeys.blockedUsers(),
+    queryFn: async () => {
+      const response = await getBlockedUsers();
+      return response.blockedUsers;
+    },
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+    refetchOnWindowFocus: false,
   });
 };
 

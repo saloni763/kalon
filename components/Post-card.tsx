@@ -39,6 +39,7 @@ interface PostProps {
   onVote?: (postId: string, optionIndex: number) => void;
   onDelete?: (postId: string) => void;
   isLiked?: boolean;
+  isSaved?: boolean;
   isFollowingUser?: boolean;
 }
 
@@ -126,6 +127,7 @@ export default function Post({
   onVote,
   onDelete,
   isLiked = false,
+  isSaved = false,
   isFollowingUser = false,
 }: PostProps) {
   const currentUser = useUser();
@@ -137,6 +139,7 @@ export default function Post({
   const [showReportDrawer, setShowReportDrawer] = useState(false);
   const [showImageViewer, setShowImageViewer] = useState(false);
   const [localIsLiked, setLocalIsLiked] = useState(isLiked);
+  const [localIsSaved, setLocalIsSaved] = useState(isSaved);
   const [isCommented, setIsCommented] = useState(false);
   const [isShared, setIsShared] = useState(false);
   const [userVote, setUserVote] = useState<number | null>((post as any).userVoteIndex ?? null);
@@ -151,6 +154,11 @@ export default function Post({
   useEffect(() => {
     setLocalIsLiked(isLiked);
   }, [isLiked]);
+
+  // Sync saved state with prop changes
+  useEffect(() => {
+    setLocalIsSaved(isSaved);
+  }, [isSaved]);
 
   // Sync counts when post data changes (e.g., after refetch)
   useEffect(() => {
@@ -240,8 +248,11 @@ export default function Post({
     {
       id: 'save',
       icon: <SaveIcon />,
-      text: 'Save',
-      onPress: () => onSave?.(post.id, post),
+      text: localIsSaved ? 'Unsave' : 'Save',
+      onPress: () => {
+        setLocalIsSaved(!localIsSaved);
+        onSave?.(post.id, post);
+      },
     },
     {
       id: 'not-interested',

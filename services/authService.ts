@@ -298,6 +298,17 @@ export interface UnfollowUserResponse {
   following: boolean;
 }
 
+// Block/Unblock interfaces
+export interface BlockUserResponse {
+  message: string;
+  blockedUsers: string[];
+}
+
+export interface UnblockUserResponse {
+  message: string;
+  blockedUsers: string[];
+}
+
 // Follow user API call
 export const followUser = async (userId: string): Promise<FollowUserResponse> => {
   try {
@@ -358,6 +369,51 @@ export const getFollowing = async (userId: string): Promise<GetFollowingResponse
     return response.data;
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message || 'Failed to get following';
+    throw new Error(errorMessage);
+  }
+};
+
+// Block user API call
+export const blockUser = async (userId: string): Promise<BlockUserResponse> => {
+  try {
+    const response = await api.post<BlockUserResponse>(
+      API_ROUTES.AUTH.BLOCK_USER(userId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to block user';
+    throw new Error(errorMessage);
+  }
+};
+
+// Unblock user API call
+export const unblockUser = async (userId: string): Promise<UnblockUserResponse> => {
+  try {
+    const response = await api.post<UnblockUserResponse>(
+      API_ROUTES.AUTH.UNBLOCK_USER(userId)
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to unblock user';
+    throw new Error(errorMessage);
+  }
+};
+
+// Get blocked users response interface
+export interface GetBlockedUsersResponse {
+  message: string;
+  blockedUsers: User[];
+}
+
+// Get blocked users API call
+export const getBlockedUsers = async (): Promise<GetBlockedUsersResponse> => {
+  try {
+    const response = await api.get<GetBlockedUsersResponse>(
+      API_ROUTES.AUTH.GET_BLOCKED_USERS
+    );
+    return response.data;
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to get blocked users';
     throw new Error(errorMessage);
   }
 };
